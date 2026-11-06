@@ -1,0 +1,65 @@
+{
+  "documents": {
+    "invoice": "FACTURA",
+    "credit_note": "NOTA DE CRÉDITO"
+  },
+  "ruc": "R.U.C.",
+  "number": "No.",
+  "authorizationNumber": "NÚMERO DE AUTORIZACIÓN",
+  "authorizedAt": "FECHA Y HORA DE AUTORIZACIÓN",
+  "environment": "AMBIENTE",
+  "environments": {
+    "test": "PRUEBAS",
+    "production": "PRODUCCIÓN"
+  },
+  "emission": "EMISIÓN",
+  "normalEmission": "NORMAL",
+  "accessKey": "CLAVE DE ACCESO",
+  "headOffice": "Dirección Matriz",
+  "branch": "Dirección Sucursal",
+  "specialTaxpayer": "Contribuyente Especial Nro.",
+  "keepsAccounts": "OBLIGADO A LLEVAR CONTABILIDAD",
+  "yes": "SI",
+  "no": "NO",
+  "withholdingAgent": "Agente de Retención Resolución No.",
+  "buyerName": "Razón Social / Nombres y Apellidos",
+  "buyerId": "Identificación",
+  "issuedOn": "Fecha Emisión",
+  "modified": "Comprobante que se modifica",
+  "modifiedIssuedOn": "Fecha Emisión (Comprobante a modificar)",
+  "reason": "Razón de Modificación",
+  "columns": {
+    "code": "Cod. Principal",
+    "quantity": "Cantidad",
+    "description": "Descripción",
+    "unitPrice": "Precio Unitario",
+    "discount": "Descuento",
+    "total": "Precio Total"
+  },
+  "extra": "Información Adicional",
+  "paymentForm": "Forma de pago",
+  "value": "Valor",
+  "paymentForms": {
+    "01": "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO",
+    "15": "COMPENSACIÓN DE DEUDAS",
+    "16": "TARJETA DE DÉBITO",
+    "17": "DINERO ELECTRÓNICO",
+    "18": "TARJETA PREPAGO",
+    "19": "TARJETA DE CRÉDITO",
+    "20": "OTROS CON UTILIZACIÓN DEL SISTEMA FINANCIERO",
+    "21": "ENDOSO DE TÍTULOS"
+  },
+  "subtotalRated": "SUBTOTAL {{rate}}%",
+  "subtotalUnrated": {
+    "0": "SUBTOTAL 0%",
+    "6": "SUBTOTAL NO OBJETO DE IVA",
+    "7": "SUBTOTAL EXENTO DE IVA"
+  },
+  "subtotal": "SUBTOTAL SIN IMPUESTOS",
+  "ice": "ICE",
+  "irbpnr": "IRBPNR",
+  "tip": "PROPINA",
+  "discount": "TOTAL DESCUENTO",
+  "vatRated": "IVA {{rate}}%",
+  "total": "VALOR TOTAL"
+}
