@@ -1,0 +1,7 @@
+- Renamed to EQinvoice: install it from PyPI as `eqinvoice` and import `eqinvoice`
+- An MCP server, `eqinvoice-mcp`, keeps one issuer's clients, drafts and vouchers in a folder and lets an assistant draft, preview, issue, check and credit them
+- A Claude Code plugin in its own marketplace installs that server in one step and asks for the folder, the signature and its password, keeping the password in the system's secure storage
+- Taxpayers are looked up in the SRI's public registry, and a taxpayer gives the issuer its vouchers name
+- `price_line` works out a line's subtotal and IVA to the cent from its quantity, price, discount and the SRI's rate code
+- `read_voucher` reads back the voucher a signed document carries
+- A logo's name now sits beside its mark in the same proportion as CConnect's (17 for a mark of 28, 8 apart), centred on the mark by its own letters, and a brand folder can give its name another size with `lockup.json`
