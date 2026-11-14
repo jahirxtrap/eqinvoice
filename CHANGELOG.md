@@ -1,3 +1,2 @@
-- Fixed the trade name the SRI's registry holds for the issuing establishment, which never reached the vouchers
-- Added the withholding agent resolution, the special taxpayer number and the system provider's RUC to `configure_issuer`, so withholding agents and special taxpayers can issue
-- Added a check that refuses a resolution number the SRI's registry does not back
+- Added `period_sales`, which adds up a period's vouchers per IVA rate as the IVA declaration asks for them: the invoiced base, that base less credit notes, and its IVA
+- Added the `summarize_sales` tool, with a period's authorized sales and the vouchers still pending in it
