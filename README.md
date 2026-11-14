@@ -9,9 +9,9 @@ assistant draft, preview, issue and follow one issuer's vouchers.
 
 <p align="center">
   <a href="https://pypi.org/project/eqinvoice/">PyPI</a> ·
-  <a href="#library">Library</a> ·
-  <a href="#claude-code-plugin">Claude Code plugin</a> ·
-  <a href="#mcp-server">MCP server</a>
+  <a href="https://github.com/jahirxtrap/eqinvoice#library">Library</a> ·
+  <a href="https://github.com/jahirxtrap/eqinvoice#claude-code-plugin">Claude Code plugin</a> ·
+  <a href="https://github.com/jahirxtrap/eqinvoice#mcp-server">MCP server</a>
 </p>
 
 ```
@@ -28,7 +28,7 @@ pip install eqinvoice           # the library
 pip install "eqinvoice[mcp]"    # with the MCP server
 ```
 
-Python 3.11 or newer. In Claude Code, the [plugin](#claude-code-plugin) installs everything in one step.
+Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap/eqinvoice#claude-code-plugin) installs everything in one step.
 
 ## Capabilities
 
@@ -174,7 +174,7 @@ claude plugin marketplace add jahirxtrap/eqinvoice
 claude plugin install eqinvoice@eqinvoice
 ```
 
-On enabling it, Claude Code asks for the book folder, the .p12 signature and its password; the password goes to the system's secure storage. The plugin starts the [MCP server](#mcp-server) with `uvx` from PyPI (it needs [uv](https://docs.astral.sh/uv/)): the first start installs it, later ones take a couple of seconds. Its tools show up as `mcp__plugin_eqinvoice_eqinvoice__*`.
+On enabling it, Claude Code asks for the book folder, the .p12 signature and its password; the password goes to the system's secure storage. The plugin starts the [MCP server](https://github.com/jahirxtrap/eqinvoice#mcp-server) with `uvx` from PyPI (it needs [uv](https://docs.astral.sh/uv/)): the first start installs it, later ones take a couple of seconds. Its tools show up as `mcp__plugin_eqinvoice_eqinvoice__*`.
 
 ## MCP server
 
@@ -263,4 +263,4 @@ A tag (`1.2.0`) publishes that version to PyPI and opens its release with `CHANG
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](https://github.com/jahirxtrap/eqinvoice/blob/main/LICENSE).
