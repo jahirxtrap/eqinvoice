@@ -38,6 +38,7 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
 - **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime, accounting duty, establishments), and the issuer its vouchers name.
 - **Priced lines**: a line's subtotal and IVA worked out to the cent from its quantity, unit price, discount and the SRI's rate code.
+- **Period sales**: the vouchers of a month, or any period, added up per IVA rate as the IVA declaration asks for them, credit notes offsetting the invoices.
 - **Printed copy (RIDE)**: an A4 page or an 80 mm strip, with the SRI's full block of totals and the access key as a barcode (page) or a QR code (strip).
 - **Logo**: a picture, or a mark and a name drawn as vectors, set beside each other as a lockup.
 - **Labels**: the printed words are data. Spanish by default, as the SRI prints them; any file of the same shape replaces them.
@@ -112,6 +113,7 @@ if answer is not None and answer.authorized:
 - **Sent twice**: `reception.already_there` is true when the SRI already holds that access key, so its answer waits at the authorization service.
 - **Numbering**: the establishment, the emission point and the sequential belong to the caller's system. A sequential is never reused, and a voucher sent again keeps its access key.
 - **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries.
+- **Declaring**: `period_sales(vouchers, since, until)` adds up the authorized vouchers issued between both days per IVA rate: `gross` is the invoiced base, `net` that base less the credit notes and `vat` its IVA, the three columns of the monthly IVA declaration. Pass only what the SRI authorized.
 
 <details>
 <summary><b>Amounts and codes</b></summary>
@@ -209,6 +211,7 @@ claude mcp add --scope user eqinvoice \
 | `issue_draft` | The approved draft numbered, signed and sent to the SRI |
 | `list_vouchers` | Every voucher numbered in the current environment |
 | `check_voucher` | A pending voucher sent again and asked for |
+| `summarize_sales` | A period's authorized sales per IVA rate, ready for the IVA declaration, and the vouchers still pending in it |
 
 </details>
 

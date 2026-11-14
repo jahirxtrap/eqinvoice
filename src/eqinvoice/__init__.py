@@ -28,6 +28,7 @@ from eqinvoice.registry import (
     SriRegistry,
     Taxpayer,
 )
+from eqinvoice.sales import PeriodSales, RateSales, issued_between, period_sales
 from eqinvoice.service import (
     Authorization,
     Message,
@@ -63,6 +64,8 @@ __all__ = [
     "Message",
     "Modified",
     "Payment",
+    "PeriodSales",
+    "RateSales",
     "Reception",
     "Registry",
     "SignatureDetails",
@@ -83,7 +86,9 @@ __all__ = [
     "check_digit",
     "details",
     "issue_date",
+    "issued_between",
     "load_credential",
+    "period_sales",
     "price_line",
     "read",
     "read_credential",

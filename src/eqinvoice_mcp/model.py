@@ -12,6 +12,7 @@ from eqinvoice import (
     Line,
     Message,
     Modified,
+    PeriodSales,
     Voucher,
     VoucherKind,
 )
@@ -66,3 +67,17 @@ class Filed:
     authorized: Path | None
     printed: Path | None
     messages: tuple[Message, ...]
+
+
+@dataclass(frozen=True)
+class PendingVoucher:
+    kind: VoucherKind
+    number: str
+
+
+@dataclass(frozen=True)
+class SalesReport:
+    """The period's authorized sales; its vouchers still awaiting the SRI are listed, not added."""
+
+    sales: PeriodSales
+    pending: tuple[PendingVoucher, ...]

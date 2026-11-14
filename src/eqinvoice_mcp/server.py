@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Sequence
+from datetime import date
 from decimal import Decimal
 from functools import cache, wraps
 from pathlib import Path
@@ -31,7 +32,7 @@ from eqinvoice.protocol import VAT_RATES
 from eqinvoice.ride import default_labels
 from eqinvoice_mcp.book import Book, NotInBook
 from eqinvoice_mcp.desk import Desk, Refused
-from eqinvoice_mcp.model import Filed, Previewed, Profile
+from eqinvoice_mcp.model import Filed, Previewed, Profile, SalesReport
 from eqinvoice_mcp.settings import SettingsMissing, read_settings
 
 NAME = "eqinvoice"
@@ -281,6 +282,15 @@ def check_voucher(
 ) -> Filed:
     """A pending voucher sent again and asked for at the SRI; any other comes back as it stands."""
     return _desk().check(number, kind)
+
+
+@tool(READS)
+def summarize_sales(
+    since: Annotated[date, Field(description="The period's first day, such as 2026-11-01")],
+    until: Annotated[date, Field(description="The period's last day, such as 2026-11-30")],
+) -> SalesReport:
+    """A period's authorized sales per IVA rate, as declared: gross, net of credit notes, IVA."""
+    return _desk().sales(since, until)
 
 
 def main() -> None:

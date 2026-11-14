@@ -33,6 +33,7 @@ src/eqinvoice/
   protocol.py     every SRI code, rate, name, namespace and address, the XML parser and text_at
   access_key.py   the 49-digit access key and the issue date on the SRI's clock
   pricing.py      price_line: a line's subtotal and IVA to the cent
+  sales.py        period_sales: a period's vouchers per IVA rate, as the IVA declaration asks
   document.py     the XML builder, the XSD check and the RIMPE legend
   signature.py    the .p12 credential and the XAdES-BES signature
   service.py      the SRI's reception and authorization web services, and SimulatedSri

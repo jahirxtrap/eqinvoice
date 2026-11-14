@@ -203,6 +203,24 @@ def test_a_credit_note_offsets_an_authorized_invoice_and_never_exceeds_it(tmp_pa
         desk.draft_credit_note("001-100-000000009", "Devolucion")
 
 
+def test_the_sales_add_up_what_the_sri_authorized_and_list_what_awaits_it(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    desk.issue(desk.draft_credit_note(invoice.voucher.number, "Devolucion").draft.identifier)
+    desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    late = a_desk(tmp_path, Unreachable())
+    with pytest.raises(SriUnavailable):
+        late.issue(late.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    day = invoice.voucher.issued_on
+    report = desk.sales(day, day)
+    assert (report.sales.invoices, report.sales.credit_notes) == (2, 1)
+    (taxed,) = report.sales.rates
+    assert (taxed.gross, taxed.net, taxed.vat) == (Decimal("1000"), Decimal("500"), Decimal("75"))
+    assert [(held.kind, held.number) for held in report.pending] == [
+        (VoucherKind.INVOICE, "001-100-000000003")
+    ]
+
+
 def test_a_credit_note_needs_an_invoice_the_sri_authorized(tmp_path):
     desk = a_configured_desk(tmp_path, Returning())
     refused = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)

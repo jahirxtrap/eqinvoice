@@ -4,7 +4,7 @@ import secrets
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from eqinvoice import (
     Buyer,
@@ -23,13 +23,23 @@ from eqinvoice import (
     VoucherKind,
     access_key,
     issue_date,
+    issued_between,
+    period_sales,
     read,
     sign_voucher,
     simulated_credential,
 )
 from eqinvoice.ride import Layout, render
 from eqinvoice_mcp.book import Book
-from eqinvoice_mcp.model import Draft, Filed, Previewed, Profile, Standing
+from eqinvoice_mcp.model import (
+    Draft,
+    Filed,
+    PendingVoucher,
+    Previewed,
+    Profile,
+    SalesReport,
+    Standing,
+)
 
 RUC_DIGITS = 13
 CEDULA_DIGITS = 10
@@ -277,6 +287,18 @@ class Desk:
 
     def vouchers(self) -> tuple[Filed, ...]:
         return self._book.vouchers(self._book.profile().environment)
+
+    def sales(self, since: date, until: date) -> SalesReport:
+        filed = self.vouchers()
+        authorized = (held.voucher for held in filed if held.standing == Standing.AUTHORIZED)
+        pending = (held.voucher for held in filed if held.standing == Standing.PENDING)
+        return SalesReport(
+            period_sales(authorized, since, until),
+            tuple(
+                PendingVoucher(voucher.kind, voucher.number)
+                for voucher in issued_between(pending, since, until)
+            ),
+        )
 
     def check(self, number: str, kind: VoucherKind = VoucherKind.INVOICE) -> Filed:
         """A pending voucher sent again and asked for; any other comes back as it stands."""
