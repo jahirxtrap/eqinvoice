@@ -1,1 +1,3 @@
-- Fixed the links on the PyPI page (the license, the plugin and the MCP server), which opened a 404
+- Fixed the trade name the SRI's registry holds for the issuing establishment, which never reached the vouchers
+- Added the withholding agent resolution, the special taxpayer number and the system provider's RUC to `configure_issuer`, so withholding agents and special taxpayers can issue
+- Added a check that refuses a resolution number the SRI's registry does not back

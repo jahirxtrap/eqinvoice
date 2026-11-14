@@ -9,7 +9,7 @@
     {
       "name": "eqinvoice",
       "description": "Electronic invoices and credit notes for Ecuador's SRI: clients looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "source": "./plugin",
       "category": "Productivity",
       "tags": ["mcp", "invoices", "ecuador", "sri"]
