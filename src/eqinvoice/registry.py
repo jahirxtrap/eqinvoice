@@ -58,14 +58,18 @@ class Taxpayer:
         special_taxpayer: str | None = None,
         system_provider_ruc: str | None = None,
     ) -> Issuer:
-        """The issuer its vouchers name; an agent or special taxpayer brings its number."""
+        """The issuer its vouchers name; only an agent or special taxpayer brings its number."""
         office = self.head_office
         if office is None:
             raise VoucherInvalid(f"The registry lists no head office for {self.ruc}")
         if self.withholding_agent and not withholding_agent:
             raise VoucherInvalid(f"{self.ruc} is a withholding agent: its resolution is required")
+        if withholding_agent and not self.withholding_agent:
+            raise VoucherInvalid(f"The SRI's registry lists {self.ruc} as no withholding agent")
         if self.special_taxpayer and not special_taxpayer:
             raise VoucherInvalid(f"{self.ruc} is a special taxpayer: its number is required")
+        if special_taxpayer and not self.special_taxpayer:
+            raise VoucherInvalid(f"The SRI's registry lists {self.ruc} as no special taxpayer")
         return Issuer(
             legal_name=self.legal_name,
             ruc=self.ruc,

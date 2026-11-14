@@ -188,7 +188,7 @@ claude mcp add --scope user eqinvoice \
   -- uvx --from "eqinvoice[mcp]" eqinvoice-mcp
 ```
 
-- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point. The legal name, the address and the accounting duty come from the SRI's registry.
+- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point. The legal name, the address, the accounting duty, the RIMPE regime and the establishment's trade name come from the SRI's registry. A withholding agent or a special taxpayer adds its resolution number, which the registry does not publish, and the RUC of the invoicing system's provider can go on every voucher.
 - **Clients**: `register_client` keeps a buyer and its email. A RUC is named as the registry holds it; a cédula or a passport brings its name.
 - **Drafts first**: every voucher starts as a draft with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI until the draft is issued.
 - **Issuing**: `issue_draft` numbers the draft, signs it, sends it and files it as the SRI leaves it: `authorized` (with its record and its printed copy), `refused` (with the SRI's messages) or `pending`, which `check_voucher` asks for again.

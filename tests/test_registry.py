@@ -96,3 +96,12 @@ def test_a_withholding_agent_or_special_taxpayer_brings_its_number():
         a_taxpayer(special_taxpayer=True).issuer()
     issuer = a_taxpayer(withholding_agent=True).issuer(withholding_agent="1")
     assert issuer.withholding_agent == "1"
+    special = a_taxpayer(special_taxpayer=True).issuer(special_taxpayer="5368")
+    assert special.special_taxpayer == "5368"
+
+
+def test_a_number_the_registry_does_not_back_is_refused():
+    with pytest.raises(VoucherInvalid):
+        a_taxpayer().issuer(withholding_agent="1")
+    with pytest.raises(VoucherInvalid):
+        a_taxpayer().issuer(special_taxpayer="5368")

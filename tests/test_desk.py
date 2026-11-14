@@ -12,6 +12,7 @@ from eqinvoice import (
     BuyerKind,
     CredentialRefused,
     Environment,
+    Establishment,
     Message,
     Payment,
     Reception,
@@ -19,6 +20,8 @@ from eqinvoice import (
     SimulatedSri,
     Sri,
     SriUnavailable,
+    Taxpayer,
+    VoucherInvalid,
     VoucherKind,
     price_line,
     simulated_credential,
@@ -49,8 +52,10 @@ class Returning:
         return None
 
 
-def a_desk(root: Path, sri: Sri | None = None, clock=lambda: NOW) -> Desk:
-    taxpayers = (a_taxpayer(), a_taxpayer(ruc=CLIENT_RUC, legal_name="CLIENTE S.A.S."))
+def a_desk(
+    root: Path, sri: Sri | None = None, clock=lambda: NOW, issuer: Taxpayer | None = None
+) -> Desk:
+    taxpayers = (issuer or a_taxpayer(), a_taxpayer(ruc=CLIENT_RUC, legal_name="CLIENTE S.A.S."))
     held = sri or SimulatedSri()
     return Desk(
         Book(root),
@@ -74,6 +79,30 @@ def test_the_issuer_is_configured_as_the_registry_holds_it(tmp_path):
     assert profile.issuer.legal_name == "ACME COMERCIAL S.A.S." and profile.issuer.keeps_accounts
     assert profile.establishment_address == "LOJA / LOJA / SUCRE / AV. UNIVERSITARIA 10-20"
     assert Book(tmp_path).profile() == profile
+
+
+def test_the_issuer_takes_the_trade_name_of_its_establishment(tmp_path):
+    offices = (
+        Establishment(
+            "001", "LOJA / LOJA / SUCRE / AV. UNIVERSITARIA", "ACME COMERCIAL S.A.S.", True, True
+        ),
+        Establishment(
+            "002", "LOJA / LOJA / EL VALLE / AV. SALVADOR BUSTAMANTE", "ACME SHOP", False, True
+        ),
+    )
+    desk = a_desk(tmp_path, issuer=a_taxpayer(establishments=offices))
+    assert desk.configure(RUC, Environment.TEST, "002", "100").issuer.trade_name == "ACME SHOP"
+    assert desk.configure(RUC, Environment.TEST, "001", "100").issuer.trade_name is None
+
+
+def test_an_agent_or_special_taxpayer_issues_with_its_numbers(tmp_path):
+    agent = a_taxpayer(withholding_agent=True, special_taxpayer=True)
+    desk = a_desk(tmp_path, issuer=agent)
+    with pytest.raises(VoucherInvalid):
+        desk.configure(RUC, Environment.TEST, "001", "100")
+    issuer = desk.configure(RUC, Environment.TEST, "001", "100", "1", "5368", RUC).issuer
+    assert (issuer.withholding_agent, issuer.special_taxpayer) == ("1", "5368")
+    assert issuer.system_provider_ruc == RUC
 
 
 def test_an_unknown_ruc_or_a_closed_establishment_cannot_issue(tmp_path):

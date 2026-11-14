@@ -83,13 +83,27 @@ class Desk:
         return taxpayer
 
     def configure(
-        self, ruc: str, environment: Environment, establishment: str, point: str
+        self,
+        ruc: str,
+        environment: Environment,
+        establishment: str,
+        point: str,
+        withholding_agent: str | None = None,
+        special_taxpayer: str | None = None,
+        system_provider_ruc: str | None = None,
     ) -> Profile:
+        """The establishment's trade name is kept unless it only repeats the legal name."""
         taxpayer = self._active(ruc)
         office = taxpayer.establishment(establishment)
         if office is None or not office.open:
             raise Refused(f"{ruc} has no open establishment {establishment}")
-        profile = Profile(taxpayer.issuer(), environment, establishment, point, office.address)
+        issuer = taxpayer.issuer(
+            trade_name=office.trade_name if office.trade_name != taxpayer.legal_name else None,
+            withholding_agent=withholding_agent,
+            special_taxpayer=special_taxpayer,
+            system_provider_ruc=system_provider_ruc,
+        )
+        profile = Profile(issuer, environment, establishment, point, office.address)
         self._book.keep_profile(profile)
         return profile
 

@@ -171,9 +171,29 @@ def configure_issuer(
     environment: Environment,
     establishment: str = DEFAULT_ESTABLISHMENT,
     point: str = DEFAULT_POINT,
+    withholding_agent: Annotated[
+        str | None,
+        Field(description="Its withholding agent resolution, if the SRI's registry lists it so"),
+    ] = None,
+    special_taxpayer: Annotated[
+        str | None,
+        Field(description="Its special taxpayer number, if the SRI's registry lists it so"),
+    ] = None,
+    system_provider_ruc: Annotated[
+        str | None,
+        Field(description="The RUC of whoever provides the invoicing system, for every voucher"),
+    ] = None,
 ) -> Profile:
-    """Who issues: a RUC as the SRI's registry holds it, issuing from that point and environment."""
-    return _desk().configure(ruc, environment, establishment, point)
+    """Who issues: a RUC as the SRI's registry holds it, from that establishment and point."""
+    return _desk().configure(
+        ruc,
+        environment,
+        establishment,
+        point,
+        withholding_agent,
+        special_taxpayer,
+        system_provider_ruc,
+    )
 
 
 @tool(READS)
