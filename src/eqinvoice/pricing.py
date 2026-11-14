@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from ecuador_einvoicing.errors import VoucherInvalid
-from ecuador_einvoicing.model import ZERO, Line
-from ecuador_einvoicing.protocol import VAT_RATES
+from eqinvoice.errors import VoucherInvalid
+from eqinvoice.model import ZERO, Line
+from eqinvoice.protocol import VAT_RATES
 
 CENT = Decimal("0.01")
 HUNDRED = Decimal("100")

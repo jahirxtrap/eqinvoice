@@ -5,8 +5,8 @@ from decimal import Decimal
 
 from lxml import etree
 
-from ecuador_einvoicing.errors import VoucherInvalid
-from ecuador_einvoicing.model import (
+from eqinvoice.errors import VoucherInvalid
+from eqinvoice.model import (
     ZERO,
     Buyer,
     BuyerKind,
@@ -19,7 +19,7 @@ from ecuador_einvoicing.model import (
     Voucher,
     VoucherKind,
 )
-from ecuador_einvoicing.protocol import (
+from eqinvoice.protocol import (
     BUYER_CODES,
     CODE_TAGS,
     DATE_FORMAT,
@@ -34,7 +34,7 @@ from ecuador_einvoicing.protocol import (
     SYSTEM_PROVIDER_FIELD,
     YES,
 )
-from ecuador_einvoicing.protocol import text_at as _text
+from eqinvoice.protocol import text_at as _text
 
 TOTAL_TAGS = {VoucherKind.INVOICE: "importeTotal", VoucherKind.CREDIT_NOTE: "valorModificacion"}
 

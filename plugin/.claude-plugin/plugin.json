@@ -1,0 +1,34 @@
+{
+  "name": "eqinvoice",
+  "version": "1.0.0",
+  "description": "Electronic invoices and credit notes for Ecuador's SRI: clients looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
+  "author": {
+    "name": "jahirtrap",
+    "url": "https://github.com/jahirxtrap"
+  },
+  "homepage": "https://github.com/jahirxtrap/eqinvoice",
+  "repository": "https://github.com/jahirxtrap/eqinvoice",
+  "license": "MIT",
+  "keywords": ["mcp", "invoices", "ecuador", "sri"],
+  "userConfig": {
+    "book": {
+      "type": "directory",
+      "title": "Book folder",
+      "description": "Where EQinvoice keeps the issuer, its clients, its drafts and every voucher it issues",
+      "required": true
+    },
+    "signature": {
+      "type": "file",
+      "title": "Signature (.p12)",
+      "description": "The issuer's electronic signature, as a .p12 file",
+      "required": true
+    },
+    "signature_password": {
+      "type": "string",
+      "title": "Signature password",
+      "description": "The password of the .p12 signature",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

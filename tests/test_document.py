@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 from lxml import etree
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     BuyerKind,
     Payment,
@@ -14,7 +14,7 @@ from ecuador_einvoicing import (
     build,
     rimpe_legend,
 )
-from tests.builders import a_line, a_voucher, an_issuer, signed
+from tests.builders import RUC, a_line, a_voucher, an_issuer, signed
 
 
 def tree_of(**overrides) -> etree._Element:
@@ -66,7 +66,7 @@ def test_each_rate_adds_up_its_own_base_and_tax():
 
 def test_the_email_and_the_system_provider_ride_in_the_extra_fields():
     extra = {f.get("nombre"): f.text for f in tree_of().iterfind("infoAdicional/campoAdicional")}
-    assert extra == {"Email": "ana@example.com", "RUC Proveedor": "1790011223001"}
+    assert extra == {"Email": "ana@example.com", "RUC Proveedor": RUC}
 
 
 def test_no_more_extra_fields_than_the_schema_takes():

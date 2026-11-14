@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable, Sequence
 from decimal import Decimal
 from functools import cache, wraps
+from pathlib import Path
 from typing import Annotated, ParamSpec, TypeVar
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Icon, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     CredentialRefused,
     Environment,
@@ -23,15 +26,18 @@ from ecuador_einvoicing import (
     price_line,
     read_credential,
 )
-from ecuador_einvoicing.model import ZERO
-from ecuador_einvoicing.protocol import VAT_RATES
-from ecuador_einvoicing.ride import default_labels
-from ecuador_einvoicing_mcp.book import Book, NotInBook
-from ecuador_einvoicing_mcp.desk import Desk, Refused
-from ecuador_einvoicing_mcp.model import Filed, Previewed, Profile
-from ecuador_einvoicing_mcp.settings import SettingsMissing, read_settings
+from eqinvoice.model import ZERO
+from eqinvoice.protocol import VAT_RATES
+from eqinvoice.ride import default_labels
+from eqinvoice_mcp.book import Book, NotInBook
+from eqinvoice_mcp.desk import Desk, Refused
+from eqinvoice_mcp.model import Filed, Previewed, Profile
+from eqinvoice_mcp.settings import SettingsMissing, read_settings
 
-NAME = "ecuador-einvoicing"
+NAME = "eqinvoice"
+TITLE = "EQinvoice"
+ICON = Path(__file__).with_name("icon.svg")
+ICON_TYPE = "image/svg+xml"
 INSTRUCTIONS = (
     "Electronic invoices and credit notes for Ecuador's SRI, issued by the configured issuer. "
     "Every voucher starts as a draft that comes with a printed preview (a PDF path) to show the "
@@ -67,20 +73,52 @@ VAT_CHOICES = _choices(
 )
 PAYMENT_CHOICES = _choices(default_labels()["paymentForms"])
 
-server = MCPServer(name=NAME, instructions=INSTRUCTIONS)
+server = MCPServer(
+    name=NAME,
+    title=TITLE,
+    instructions=INSTRUCTIONS,
+    icons=[
+        Icon(
+            src=f"data:{ICON_TYPE};base64,{base64.b64encode(ICON.read_bytes()).decode()}",
+            mime_type=ICON_TYPE,
+        )
+    ],
+)
 
 
-def tool(function: Callable[Arguments, Answer]) -> Callable[Arguments, Answer]:
+READS = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+LOOKS_UP = ToolAnnotations(read_only_hint=True, open_world_hint=True)
+KEEPS = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True
+)
+DRAFTS = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
+)
+REMOVES = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
+)
+ISSUES = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True
+)
 
-    @wraps(function)
-    def answered(*arguments: Arguments.args, **named: Arguments.kwargs) -> Answer:
-        try:
-            return function(*arguments, **named)
-        except ANTICIPATED as reason:
-            raise ToolError(str(reason)) from reason
 
-    server.tool()(answered)
-    return function
+def tool(
+    annotations: ToolAnnotations,
+) -> Callable[[Callable[Arguments, Answer]], Callable[Arguments, Answer]]:
+    """A desk tool with its hints, whose anticipated failures reach the client with their reason."""
+
+    def register(function: Callable[Arguments, Answer]) -> Callable[Arguments, Answer]:
+        @wraps(function)
+        def answered(*arguments: Arguments.args, **named: Arguments.kwargs) -> Answer:
+            try:
+                return function(*arguments, **named)
+            except ANTICIPATED as reason:
+                raise ToolError(str(reason)) from reason
+
+        server.tool(annotations=annotations)(answered)
+        return function
+
+    return register
 
 
 class LineRequest(BaseModel):
@@ -121,13 +159,13 @@ def _priced(lines: Sequence[LineRequest]) -> tuple[Line, ...]:
     )
 
 
-@tool
+@tool(LOOKS_UP)
 def look_up_taxpayer(ruc: str) -> Taxpayer:
     """A RUC as the SRI's registry holds it: legal name, standing, regime and establishments."""
     return _desk().look_up(ruc)
 
 
-@tool
+@tool(KEEPS)
 def configure_issuer(
     ruc: str,
     environment: Environment,
@@ -138,13 +176,13 @@ def configure_issuer(
     return _desk().configure(ruc, environment, establishment, point)
 
 
-@tool
+@tool(READS)
 def show_issuer() -> Profile:
     """Who issues now, from which establishment and point, and in which environment."""
     return _desk().profile()
 
 
-@tool
+@tool(KEEPS)
 def register_client(
     identification: Annotated[str, Field(description="A RUC, a cédula or a passport number")],
     email: Annotated[
@@ -156,19 +194,19 @@ def register_client(
     return _desk().register_client(identification, email, name)
 
 
-@tool
+@tool(READS)
 def list_clients() -> list[Buyer]:
     """Every client in the book."""
     return list(_desk().clients())
 
 
-@tool
+@tool(REMOVES)
 def forget_client(identification: str) -> list[Buyer]:
     """The client taken out of the book; the clients left come back."""
     return list(_desk().forget_client(identification))
 
 
-@tool
+@tool(DRAFTS)
 def draft_invoice(
     client: Annotated[str, Field(description="The identification of a client in the book")],
     lines: list[LineRequest],
@@ -180,7 +218,7 @@ def draft_invoice(
     return _desk().draft_invoice(client, _priced(lines), payment_form)
 
 
-@tool
+@tool(DRAFTS)
 def draft_credit_note(
     invoice_number: Annotated[str, Field(description="An authorized invoice: 001-001-000000001")],
     reason: str,
@@ -192,31 +230,31 @@ def draft_credit_note(
     return _desk().draft_credit_note(invoice_number, reason, _priced(lines or []))
 
 
-@tool
+@tool(READS)
 def list_drafts() -> list[Previewed]:
     """Every draft waiting to be issued, with the voucher it would become now."""
     return list(_desk().drafts())
 
 
-@tool
+@tool(REMOVES)
 def discard_draft(identifier: str) -> list[Previewed]:
     """The draft thrown away; the drafts left come back."""
     return list(_desk().discard(identifier))
 
 
-@tool
+@tool(ISSUES)
 def issue_draft(identifier: str) -> Filed:
     """The approved draft numbered, signed and sent to the SRI; it comes back as the SRI left it."""
     return _desk().issue(identifier)
 
 
-@tool
+@tool(READS)
 def list_vouchers() -> list[Filed]:
     """Every voucher the issuer numbered in its current environment, as each stands."""
     return list(_desk().vouchers())
 
 
-@tool
+@tool(KEEPS)
 def check_voucher(
     number: Annotated[str, Field(description="001-001-000000001")],
     kind: VoucherKind = VoucherKind.INVOICE,

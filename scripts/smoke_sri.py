@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     BuyerKind,
     Environment,
@@ -24,11 +24,9 @@ from ecuador_einvoicing import (
     read_credential,
     sign_voucher,
 )
-from ecuador_einvoicing.ride import Layout, render
+from eqinvoice.ride import Layout, render
 
-USAGE = (
-    "usage: smoke_sri.py <setup.json> <out dir>, with EINVOICING_P12 and EINVOICING_P12_PASSWORD"
-)
+USAGE = "usage: smoke_sri.py <setup.json> <out dir>, with EQINVOICE_P12 and EQINVOICE_P12_PASSWORD"
 ATTEMPTS = 5
 WAIT_SECONDS = 3
 SEQUENTIAL_DIGITS = 9
@@ -76,14 +74,14 @@ def _voucher(setup: dict[str, str], issuer: Issuer, now: datetime) -> Voucher:
 
 
 def main() -> int:
-    if len(sys.argv) != 3 or "EINVOICING_P12" not in os.environ:
+    if len(sys.argv) != 3 or "EQINVOICE_P12" not in os.environ:
         print(USAGE)
         return WRONG_USE
     setup = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = Path(sys.argv[2])
     issuer = Issuer(**setup["issuer"])
     credential = read_credential(
-        Path(os.environ["EINVOICING_P12"]), os.environ.get("EINVOICING_P12_PASSWORD", "")
+        Path(os.environ["EQINVOICE_P12"]), os.environ.get("EQINVOICE_P12_PASSWORD", "")
     )
     now = datetime.now(UTC)
     voucher = _voucher(setup, issuer, now)

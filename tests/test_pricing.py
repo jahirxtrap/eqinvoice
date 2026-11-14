@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from ecuador_einvoicing import VoucherInvalid, price_line
+from eqinvoice import VoucherInvalid, price_line
 from tests.builders import a_voucher, signed
 
 

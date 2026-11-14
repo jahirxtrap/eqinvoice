@@ -1,11 +1,28 @@
 [project]
-name = "ecuador-einvoicing"
+name = "eqinvoice"
 version = "1.0.0"
-description = "Electronic invoices and credit notes for Ecuador's SRI: build, sign, send, authorize and print."
+description = "Electronic invoices and credit notes for Ecuador's SRI: build, sign, send, authorize and print, as a library or an MCP server."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "jahirtrap" }]
+keywords = ["ecuador", "sri", "electronic invoice", "factura electronica", "xades", "mcp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Natural Language :: Spanish",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Accounting",
+    "Typing :: Typed",
+]
 dependencies = [
     "cryptography>=50.0",
+    "fonttools>=4.60",
     "httpx>=0.28",
     "lxml>=6.1",
     "reportlab>=5.1",
@@ -22,18 +39,24 @@ dev = [
     "ruff>=0.17",
 ]
 
+[project.urls]
+Homepage = "https://github.com/jahirxtrap/eqinvoice"
+Repository = "https://github.com/jahirxtrap/eqinvoice"
+Issues = "https://github.com/jahirxtrap/eqinvoice/issues"
+
 [project.scripts]
-ecuador-einvoicing-mcp = "ecuador_einvoicing_mcp.server:main"
+eqinvoice-mcp = "eqinvoice_mcp.server:main"
 
 [build-system]
-requires = ["setuptools>=75.0"]
+requires = ["setuptools>=80.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ecuador_einvoicing = ["py.typed", "schemas/*.xsd", "labels/*.json"]
+eqinvoice = ["py.typed", "schemas/*.xsd", "labels/*.json"]
+eqinvoice_mcp = ["icon.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

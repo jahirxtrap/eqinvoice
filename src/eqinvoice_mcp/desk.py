@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     BuyerKind,
     Credential,
@@ -27,9 +27,9 @@ from ecuador_einvoicing import (
     sign_voucher,
     simulated_credential,
 )
-from ecuador_einvoicing.ride import Layout, render
-from ecuador_einvoicing_mcp.book import Book
-from ecuador_einvoicing_mcp.model import Draft, Filed, Previewed, Profile, Standing
+from eqinvoice.ride import Layout, render
+from eqinvoice_mcp.book import Book
+from eqinvoice_mcp.model import Draft, Filed, Previewed, Profile, Standing
 
 RUC_DIGITS = 13
 CEDULA_DIGITS = 10

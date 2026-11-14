@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import os
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from typing import TypeVar
 
 from pydantic import TypeAdapter
 
-from ecuador_einvoicing import Buyer, Environment, Message, Voucher, VoucherKind, read_voucher
-from ecuador_einvoicing.ride import ImageLogo, Logo, MarkLogo
-from ecuador_einvoicing_mcp.model import Draft, Filed, Profile, Standing
+from eqinvoice import Buyer, Environment, Message, Voucher, VoucherKind, read_voucher
+from eqinvoice.ride import ImageLogo, Logo, MarkLogo
+from eqinvoice_mcp.model import Draft, Filed, Lockup, Profile, Standing
 
 PROFILE = "profile.json"
 CLIENTS = "clients"
@@ -25,10 +26,12 @@ PREVIEW = ".pdf"
 MARK = "mark.svg"
 NAME = "name.svg"
 FONTS = "*.ttf"
+SIZING = "lockup.json"
 PICTURES = ("logo.png", "logo.jpg")
 INDENT = 2
 
 PROFILES = TypeAdapter(Profile)
+LOCKUP = TypeAdapter(Lockup)
 CLIENT = TypeAdapter(Buyer)
 DRAFT = TypeAdapter(Draft)
 MESSAGES = TypeAdapter(tuple[Message, ...])
@@ -194,6 +197,9 @@ class Book:
         brand = self.root / BRAND
         mark, name, fonts = brand / MARK, brand / NAME, sorted(brand.glob(FONTS))
         if mark.is_file() and name.is_file() and fonts:
-            return MarkLogo(mark=mark, name=name, font=fonts[0])
+            sizing = brand / SIZING
+            chosen = asdict(LOCKUP.validate_json(sizing.read_bytes())) if sizing.is_file() else {}
+            given = {key: value for key, value in chosen.items() if value is not None}
+            return MarkLogo(mark=mark, name=name, font=fonts[0], **given)
         picture = next((brand / each for each in PICTURES if (brand / each).is_file()), None)
         return ImageLogo(picture) if picture else None

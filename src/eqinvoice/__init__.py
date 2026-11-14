@@ -1,12 +1,12 @@
-from ecuador_einvoicing.access_key import access_key, check_digit, issue_date
-from ecuador_einvoicing.document import build, rimpe_legend, validate
-from ecuador_einvoicing.errors import (
+from eqinvoice.access_key import access_key, check_digit, issue_date
+from eqinvoice.document import build, rimpe_legend, validate
+from eqinvoice.errors import (
     CredentialProblem,
     CredentialRefused,
     SriUnavailable,
     VoucherInvalid,
 )
-from ecuador_einvoicing.model import (
+from eqinvoice.model import (
     Buyer,
     BuyerKind,
     Environment,
@@ -19,16 +19,16 @@ from ecuador_einvoicing.model import (
     Voucher,
     VoucherKind,
 )
-from ecuador_einvoicing.pricing import cents, price_line
-from ecuador_einvoicing.record import read, read_voucher
-from ecuador_einvoicing.registry import (
+from eqinvoice.pricing import cents, price_line
+from eqinvoice.record import read, read_voucher
+from eqinvoice.registry import (
     Establishment,
     Registry,
     SimulatedRegistry,
     SriRegistry,
     Taxpayer,
 )
-from ecuador_einvoicing.service import (
+from eqinvoice.service import (
     Authorization,
     Message,
     Reception,
@@ -36,7 +36,7 @@ from ecuador_einvoicing.service import (
     Sri,
     SriWebServices,
 )
-from ecuador_einvoicing.signature import (
+from eqinvoice.signature import (
     Credential,
     SignatureDetails,
     details,

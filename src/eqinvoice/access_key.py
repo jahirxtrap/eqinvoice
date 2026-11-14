@@ -3,8 +3,8 @@ from __future__ import annotations
 import secrets
 from datetime import date, datetime
 
-from ecuador_einvoicing.model import Environment, VoucherKind
-from ecuador_einvoicing.protocol import (
+from eqinvoice.model import Environment, VoucherKind
+from eqinvoice.protocol import (
     CLOCK,
     DOCUMENT_CODES,
     ENVIRONMENT_CODES,

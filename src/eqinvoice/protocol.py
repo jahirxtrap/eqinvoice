@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from lxml import etree
 
-from ecuador_einvoicing.model import BuyerKind, Environment, VoucherKind
+from eqinvoice.model import BuyerKind, Environment, VoucherKind
 
 VERSION = "1.1.0"
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"

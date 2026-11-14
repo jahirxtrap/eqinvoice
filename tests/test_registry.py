@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from ecuador_einvoicing import SriRegistry, SriUnavailable, VoucherInvalid
-from ecuador_einvoicing.protocol import ESTABLISHMENTS_PATH, TAXPAYER_PATH
+from eqinvoice import SriRegistry, SriUnavailable, VoucherInvalid
+from eqinvoice.protocol import ESTABLISHMENTS_PATH, TAXPAYER_PATH
 from tests.builders import RUC, a_taxpayer
 
 HELD = [

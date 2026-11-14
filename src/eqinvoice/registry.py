@@ -5,9 +5,9 @@ from typing import Any, Protocol
 
 import httpx
 
-from ecuador_einvoicing.errors import SriUnavailable, VoucherInvalid
-from ecuador_einvoicing.model import Issuer
-from ecuador_einvoicing.protocol import (
+from eqinvoice.errors import SriUnavailable, VoucherInvalid
+from eqinvoice.model import Issuer
+from eqinvoice.protocol import (
     ACTIVE_TAXPAYER,
     ESTABLISHMENTS_PATH,
     OPEN_ESTABLISHMENT,
@@ -17,7 +17,7 @@ from ecuador_einvoicing.protocol import (
     TAXPAYER_PATH,
     YES,
 )
-from ecuador_einvoicing.service import TIMEOUT_SECONDS
+from eqinvoice.service import TIMEOUT_SECONDS
 
 NO_CONTENT = 204
 CLIENT_FAILURE = 400

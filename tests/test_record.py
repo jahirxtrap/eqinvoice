@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from ecuador_einvoicing import Payment, VoucherInvalid, VoucherKind, read, read_voucher
+from eqinvoice import Payment, VoucherInvalid, VoucherKind, read, read_voucher
 from tests.builders import RUC, a_voucher, authorized, signed
 
 

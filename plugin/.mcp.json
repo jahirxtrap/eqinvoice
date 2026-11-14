@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "eqinvoice": {
+      "command": "uvx",
+      "args": ["--from", "eqinvoice[mcp]==1.0.0", "eqinvoice-mcp"],
+      "env": {
+        "EQINVOICE_BOOK": "${user_config.book}",
+        "EQINVOICE_P12": "${user_config.signature}",
+        "EQINVOICE_P12_PASSWORD": "${user_config.signature_password}"
+      }
+    }
+  }
+}

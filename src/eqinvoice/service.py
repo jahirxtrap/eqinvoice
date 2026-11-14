@@ -11,9 +11,9 @@ from typing import Protocol
 import httpx
 from lxml import etree
 
-from ecuador_einvoicing.errors import SriUnavailable
-from ecuador_einvoicing.model import Environment
-from ecuador_einvoicing.protocol import (
+from eqinvoice.errors import SriUnavailable
+from eqinvoice.model import Environment
+from eqinvoice.protocol import (
     ALREADY_REGISTERED,
     AUTHORIZATION_NS,
     AUTHORIZATION_PATH,
@@ -31,7 +31,7 @@ from ecuador_einvoicing.protocol import (
     SOAP_NS,
     STILL_PROCESSING,
 )
-from ecuador_einvoicing.protocol import text_at as _text
+from eqinvoice.protocol import text_at as _text
 
 TIMEOUT_SECONDS = 30.0
 SERVER_FAILURE = 500

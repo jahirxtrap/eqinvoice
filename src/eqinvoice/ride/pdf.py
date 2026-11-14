@@ -15,17 +15,17 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Flowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from ecuador_einvoicing.document import money, rimpe_legend
-from ecuador_einvoicing.model import Issued, Modified, VoucherKind
-from ecuador_einvoicing.protocol import (
+from eqinvoice.document import money, rimpe_legend
+from eqinvoice.model import Issued, Modified, VoucherKind
+from eqinvoice.protocol import (
     CLOCK,
     DATE_FORMAT,
     EMAIL_FIELD,
     SYSTEM_PROVIDER_FIELD,
     buyer_shown,
 )
-from ecuador_einvoicing.ride.labels import Labels, default_labels, filled
-from ecuador_einvoicing.ride.logo import Logo
+from eqinvoice.ride.labels import Labels, default_labels, filled
+from eqinvoice.ride.logo import Logo
 
 
 class Layout(StrEnum):

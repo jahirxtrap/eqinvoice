@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Authorization,
     BuyerKind,
     CredentialRefused,
@@ -23,9 +23,9 @@ from ecuador_einvoicing import (
     price_line,
     simulated_credential,
 )
-from ecuador_einvoicing_mcp.book import Book, NotInBook
-from ecuador_einvoicing_mcp.desk import Desk, Refused
-from ecuador_einvoicing_mcp.model import Standing
+from eqinvoice_mcp.book import Book, NotInBook
+from eqinvoice_mcp.desk import Desk, Refused
+from eqinvoice_mcp.model import Standing
 from tests.builders import NOW, RUC, a_taxpayer
 
 CLIENT_RUC = "1790011224001"

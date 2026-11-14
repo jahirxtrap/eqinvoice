@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from ecuador_einvoicing import Environment, VoucherKind, access_key, check_digit, issue_date
+from eqinvoice import Environment, VoucherKind, access_key, check_digit, issue_date
 from tests.builders import RUC
 
 SRI_SAMPLE_KEY = "0503201201176001321000110010030009900641234567814"

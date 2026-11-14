@@ -6,8 +6,9 @@ import pytest
 from PIL import Image as Picture
 from reportlab import rl_config
 
-from ecuador_einvoicing import VoucherKind
-from ecuador_einvoicing.ride import ImageLogo, Layout, default_labels, read_labels, render
+from eqinvoice import VoucherKind
+from eqinvoice.ride import ImageLogo, Layout, default_labels, read_labels, render
+from eqinvoice.ride.logo import baseline
 from tests.builders import LOGO, issued
 
 STRIP = b"/MediaBox [ 0 0 226.7717"
@@ -39,6 +40,13 @@ def test_a_mark_logo_draws_its_name_in_its_own_typeface_on_both():
     voucher = issued()
     for layout in Layout:
         assert b"PlusJakartaSans-ExtraBold" in render(voucher, layout, logo=LOGO)
+
+
+def test_a_name_is_centred_on_its_mark_by_the_glyphs_it_draws():
+    font = LOGO.font
+    assert baseline(font, "", 100, 60) == 50
+    assert baseline(font, "jump", 100, 60) > baseline(font, "ACME", 100, 60)
+    assert baseline(font, "ACME", 100, 60) < 50
 
 
 def test_a_picture_logo_is_placed_on_the_page_and_its_one_ink_copy_on_the_strip(tmp_path):

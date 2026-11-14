@@ -6,6 +6,8 @@ from functools import cache
 from pathlib import Path
 from typing import Protocol
 
+from fontTools.pens.boundsPen import BoundsPen
+from fontTools.ttLib import TTFont as FontFile
 from lxml import etree
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
@@ -13,11 +15,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Flowable, Image
 
-from ecuador_einvoicing.protocol import PARSER
+from eqinvoice.protocol import PARSER
 
-NAME_SIZE = 0.7
-NAME_GAP = 0.27
-EM = 1000
+LOCKUP_MARK = 28
+LOCKUP_NAME = 17
+LOCKUP_GAP = 8
+NAME_SIZE = LOCKUP_NAME / LOCKUP_MARK
+NAME_GAP = LOCKUP_GAP / LOCKUP_MARK
 SVG = "{http://www.w3.org/2000/svg}"
 NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 HEX = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -94,10 +98,31 @@ def _name(path: Path) -> Name:
     return Name(tuple((words, paint) for words, paint in runs if words), tracking)
 
 
-def _baseline(font: str, box: float, size: float) -> float:
-    face = pdfmetrics.getFont(font).face
-    ascent, descent = face.ascent / EM, -face.descent / EM
-    return (box - size) / 2 + (size - (ascent + descent) * size) / 2 + ascent * size
+@cache
+def _reach(path: Path, text: str) -> tuple[float, float]:
+    """How far the text's glyphs reach below and above the baseline, in ems."""
+    font = FontFile(str(path))
+    glyphs = font.getGlyphSet()
+    named = font.getBestCmap()
+    reaches: list[tuple[float, float]] = []
+    for character in set(text):
+        glyph = named.get(ord(character))
+        if glyph is None:
+            continue
+        pen = BoundsPen(glyphs)
+        glyphs[glyph].draw(pen)
+        if pen.bounds is not None:
+            reaches.append((pen.bounds[1], pen.bounds[3]))
+    if not reaches:
+        return 0.0, 0.0
+    em = font["head"].unitsPerEm
+    return min(low for low, _ in reaches) / em, max(high for _, high in reaches) / em
+
+
+def baseline(path: Path, text: str, box: float, size: float) -> float:
+    """Where the text sits from the bottom of a box so its glyphs are centred in it."""
+    low, high = _reach(path, text)
+    return box / 2 - (low + high) / 2 * size
 
 
 def _name_width(name: Name, font: str, size: float) -> float:
@@ -157,8 +182,10 @@ class Lockup(Flowable):
 
     def _write(self) -> None:
         name = _name(self.logo.name)
-        baseline = self.height - _baseline(self.font, self.height, self.size)
-        written = self.canv.beginText(self.offset, baseline)
+        text = "".join(words for words, _ in name.runs)
+        written = self.canv.beginText(
+            self.offset, baseline(self.logo.font, text, self.height, self.size)
+        )
         written.setFont(self.font, self.size)
         written.setCharSpace(name.tracking * self.size)
         for words, paint in name.runs:

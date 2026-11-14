@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     BuyerKind,
     Environment,
@@ -24,7 +24,7 @@ from ecuador_einvoicing import (
     sign_voucher,
     simulated_credential,
 )
-from ecuador_einvoicing.ride import MarkLogo
+from eqinvoice.ride import MarkLogo
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime.now(UTC)

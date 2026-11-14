@@ -5,9 +5,9 @@ from functools import cache
 
 from lxml import etree
 
-from ecuador_einvoicing.errors import VoucherInvalid
-from ecuador_einvoicing.model import ZERO, Issuer, Voucher, VoucherKind
-from ecuador_einvoicing.protocol import (
+from eqinvoice.errors import VoucherInvalid
+from eqinvoice.model import ZERO, Issuer, Voucher, VoucherKind
+from eqinvoice.protocol import (
     BUYER_CODES,
     CODE_TAGS,
     CURRENCY_NAME,

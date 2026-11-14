@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from lxml import etree
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     CredentialProblem,
     CredentialRefused,
     details,
@@ -20,7 +20,7 @@ from ecuador_einvoicing import (
     simulated_credential,
     usable,
 )
-from ecuador_einvoicing.signature import C14N, DS, ETSI, RSA_SHA1, SIMULATED_SUBJECT
+from eqinvoice.signature import C14N, DS, ETSI, RSA_SHA1, SIMULATED_SUBJECT
 from tests.builders import NOW, a_voucher, signed
 
 PASSWORD = "clave-de-prueba"

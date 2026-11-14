@@ -6,8 +6,8 @@ import httpx
 import pytest
 from lxml import etree
 
-from ecuador_einvoicing import Environment, SimulatedSri, SriUnavailable, SriWebServices
-from ecuador_einvoicing.protocol import AUTHORIZATION_PATH, RECEPTION_PATH
+from eqinvoice import Environment, SimulatedSri, SriUnavailable, SriWebServices
+from eqinvoice.protocol import AUTHORIZATION_PATH, RECEPTION_PATH
 from tests.builders import a_voucher, signed
 
 RECEIVED = (

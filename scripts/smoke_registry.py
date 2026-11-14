@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from ecuador_einvoicing import SriRegistry
+from eqinvoice import SriRegistry
 
 USAGE = "usage: smoke_registry.py <ruc>"
 NOT_FOUND = 1

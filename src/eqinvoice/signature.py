@@ -16,10 +16,10 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from lxml import etree
 
-from ecuador_einvoicing.document import build, validate
-from ecuador_einvoicing.errors import CredentialProblem, CredentialRefused
-from ecuador_einvoicing.model import Issuer, Voucher
-from ecuador_einvoicing.protocol import CLOCK, VOUCHER_ID
+from eqinvoice.document import build, validate
+from eqinvoice.errors import CredentialProblem, CredentialRefused
+from eqinvoice.model import Issuer, Voucher
+from eqinvoice.protocol import CLOCK, VOUCHER_ID
 
 DS = "http://www.w3.org/2000/09/xmldsig#"
 ETSI = "http://uri.etsi.org/01903/v1.3.2#"

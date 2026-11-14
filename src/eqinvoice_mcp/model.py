@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     Environment,
     Issuer,
@@ -21,6 +21,14 @@ class Standing(StrEnum):
     PENDING = "pending"
     AUTHORIZED = "authorized"
     REFUSED = "refused"
+
+
+@dataclass(frozen=True)
+class Lockup:
+    """A brand's own name size and gap, as fractions of its mark; the library's when absent."""
+
+    name_size: float | None = None
+    gap: float | None = None
 
 
 @dataclass(frozen=True)

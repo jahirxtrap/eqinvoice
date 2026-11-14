@@ -1,8 +1,34 @@
-# ecuador-einvoicing
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jahirxtrap/eqinvoice/main/.github/assets/banner.png" alt="EQinvoice" width="760">
+</p>
 
-Electronic invoices and credit notes for Ecuador's SRI (Servicio de Rentas Internas), offline scheme version 1.1.0. It builds the voucher, signs it XAdES-BES with the issuer's .p12, sends it to the SRI, reads the authorization back and prints the RIDE on an A4 page or an 80 mm receipt strip.
+Electronic invoices and credit notes for **Ecuador's SRI** (offline scheme 1.1.0): build the
+voucher, sign it XAdES-BES with the issuer's .p12, send it, read the authorization back and print
+the RIDE. Use it as a **library** inside your own system, or as an **MCP server** that lets an
+assistant draft, preview, issue and follow one issuer's vouchers.
 
-It holds no database and no web framework: it takes plain values in and gives documents back, so any system can put it behind its own storage and screens.
+<p align="center">
+  <a href="https://pypi.org/project/eqinvoice/">PyPI</a> ·
+  <a href="#library">Library</a> ·
+  <a href="#claude-code-plugin">Claude Code plugin</a> ·
+  <a href="#mcp-server">MCP server</a>
+</p>
+
+```
+[your system] ──values──> [eqinvoice] ──signed XML──> [SRI reception] ──> [SRI authorization]
+[assistant]   ──MCP────> [eqinvoice-mcp] ──> the book (clients, drafts, vouchers)
+```
+
+---
+
+## Install
+
+```bash
+pip install eqinvoice           # the library
+pip install "eqinvoice[mcp]"    # with the MCP server
+```
+
+Python 3.11 or newer. In Claude Code, the [plugin](#claude-code-plugin) installs everything in one step.
 
 ## Capabilities
 
@@ -10,48 +36,39 @@ It holds no database and no web framework: it takes plain values in and gives do
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
 - **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable or out of date.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
-- **Simulated SRI**: a simulated signature and an SRI that authorizes on the spot, for development and tests.
+- **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime, accounting duty, establishments), and the issuer its vouchers name.
+- **Priced lines**: a line's subtotal and IVA worked out to the cent from its quantity, unit price, discount and the SRI's rate code.
 - **Printed copy (RIDE)**: an A4 page or an 80 mm strip, with the SRI's full block of totals and the access key as a barcode (page) or a QR code (strip).
-- **Logo**: a PNG or JPEG picture (with an optional one-ink copy for thermal printers), or a mark and a name drawn from SVG as vectors.
+- **Logo**: a picture, or a mark and a name drawn as vectors, set beside each other as a lockup.
 - **Labels**: the printed words are data. Spanish by default, as the SRI prints them; any file of the same shape replaces them.
-- **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime, accounting duty, withholding agent, establishments), and the `Issuer` its vouchers name.
-- **Priced lines**: `price_line` works out a line's subtotal and IVA to the cent from its quantity, unit price, discount and the SRI's rate code.
-- **MCP desk**: an MCP server on top of the library that keeps one issuer's clients, drafts and vouchers in a folder, so an assistant can draft, preview, issue and follow them.
+- **Simulation**: a simulated signature, SRI and registry that answer on the spot, for development and tests.
 
-## Install
+---
 
-The repository is private, so pip needs access to it:
-
-```bash
-pip install "ecuador-einvoicing @ git+https://github.com/jahirxtrap/ecuador-einvoicing@v1.0.0"
-```
-
-Python 3.11 or newer.
-
-## Issue an invoice
+## Library
 
 ```python
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from ecuador_einvoicing import (
+from eqinvoice import (
     Buyer,
     BuyerKind,
     Environment,
     Issuer,
-    Line,
     Payment,
     SriWebServices,
     Voucher,
     VoucherKind,
     access_key,
     issue_date,
+    price_line,
     read,
     read_credential,
     sign_voucher,
 )
-from ecuador_einvoicing.ride import ImageLogo, Layout, render
+from eqinvoice.ride import ImageLogo, Layout, render
 
 issuer = Issuer(
     legal_name="ACME COMERCIAL S.A.S.",
@@ -62,6 +79,7 @@ issuer = Issuer(
 credential = read_credential(Path("signature.p12"), "p12 password")
 now = datetime.now(UTC)
 issued_on = issue_date(now)
+line = price_line("SKU-1", "Cafe molido (500 g)", Decimal("1"), Decimal("10.00"), "4")
 voucher = Voucher(
     kind=VoucherKind.INVOICE,
     environment=Environment.TEST,
@@ -74,19 +92,7 @@ voucher = Voucher(
     establishment_address="AV. AMAZONAS N10-20, QUITO",
     issued_on=issued_on,
     buyer=Buyer(BuyerKind.CEDULA, "1710034065", "Ana Perez", "ana@example.com"),
-    lines=(
-        Line(
-            code="SKU-1",
-            description="Cafe molido (500 g)",
-            quantity=Decimal("1"),
-            unit_price=Decimal("10.00"),
-            discount=Decimal("0"),
-            subtotal=Decimal("10.00"),
-            vat=Decimal("1.50"),
-            rate_code="4",
-            rate_percentage=Decimal("15.00"),
-        ),
-    ),
+    lines=(line,),
     payments=(Payment("01", Decimal("11.50")),),
 )
 
@@ -105,38 +111,33 @@ if answer is not None and answer.authorized:
 - **Still processing**: `authorize` gives `None` while the SRI has not answered yet; ask again later with the same access key.
 - **Sent twice**: `reception.already_there` is true when the SRI already holds that access key, so its answer waits at the authorization service.
 - **Numbering**: the establishment, the emission point and the sequential belong to the caller's system. A sequential is never reused, and a voucher sent again keeps its access key.
+- **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries.
 
-## Amounts and codes
+<details>
+<summary><b>Amounts and codes</b></summary>
 
-- **Lines come already split**: `subtotal` is the line before IVA (quantity times unit price minus discount) and `vat` its tax, both to two decimals. The voucher adds them up per rate. `price_line(code, description, quantity, unit_price, rate_code, discount)` splits one for you, rounding halves up.
+- **Lines**: `subtotal` is the line before IVA (quantity times unit price minus discount) and `vat` its tax, both to two decimals. `price_line(code, description, quantity, unit_price, rate_code, discount)` works them out, rounding halves up. The voucher adds them up per rate.
 - **IVA rate codes** (`rate_code`): the SRI's table, for example `"4"` for 15 %, `"0"` for 0 %, `"6"` not subject to IVA, `"7"` exempt.
 - **Payment forms** (`Payment.form`): the SRI's table, for example `"01"` without the financial system (cash), `"16"` debit card, `"19"` credit card, `"20"` other with the financial system (transfer). Payments of the same form are added up.
 - **Credit notes**: `modified=Modified(number, issued_on, reason)` names the invoice they correct; credit notes carry no payments.
 - **Final consumer**: `Buyer(BuyerKind.FINAL_CONSUMER)`. The voucher writes the SRI's own name and number for it.
 
-## When something fails
+</details>
+
+<details>
+<summary><b>When something fails</b></summary>
 
 - **`SriUnavailable`**: the SRI could not be reached or failed on its side. Nothing is lost: send the same document again later.
 - **`VoucherInvalid`**: the voucher breaks the SRI's schema (the message names every reason) or the record holds no voucher. Fix the data; sending it would only be returned.
 - **`CredentialRefused`**: the signature cannot sign. `problem` says why: `missing`, `unreadable` (wrong password or not a .p12) or `out_of_date`.
 - **Turned down**: `answer.authorized` is false and `answer.messages` carry the SRI's codes and texts, as it wrote them.
 
-## Logo
+</details>
 
-- **A picture**: `ImageLogo(Path("logo.png"))`, drawn at the logo's height keeping its proportions. `ImageLogo(path, one_ink_path=Path("logo-black.png"))` gives the thermal strip its own black version.
-- **A mark and a name**: `MarkLogo(mark=Path("mark.svg"), name=Path("name.svg"), font=Path("Brand-Bold.ttf"))`. The mark is an SVG of rectangles and straight paths; the name is an SVG `<text>` whose runs carry their colours (a `<tspan>` for a second colour). The name is set in the font given, beside the mark and centred on it; `name_size` and `gap` set its size and its distance as fractions of the mark.
-- **No logo**: leave `logo` out and the issuer's box takes the space.
-
-On the A4 page the logo goes above the issuer's box, in colour. On the strip it goes on top, in one ink.
-
-## Labels
-
-`default_labels()` holds the Spanish words the SRI prints. To change them, copy `src/ecuador_einvoicing/labels/es.json`, edit the values and pass `labels=read_labels(Path("labels.json"))` to `render`. The keys stay as they are.
-
-## Taxpayer registry
+### Taxpayer registry
 
 ```python
-from ecuador_einvoicing import SriRegistry
+from eqinvoice import SriRegistry
 
 taxpayer = SriRegistry().find("1791234567001")
 if taxpayer is not None and taxpayer.active:
@@ -145,28 +146,97 @@ if taxpayer is not None and taxpayer.active:
 
 - **Nobody holds it**: `find` gives `None`. A registry that cannot be reached raises `SriUnavailable`.
 - **The issuer**: `taxpayer.issuer()` names the head office address the registry lists. A withholding agent or a special taxpayer passes its resolution or number (`withholding_agent=`, `special_taxpayer=`), which the registry does not publish.
-- **Development**: `SimulatedRegistry(taxpayer, ...)` answers only for the taxpayers it was given.
 
-## MCP desk
+### Logo
 
-`ecuador-einvoicing-mcp` is an MCP server (stdio) for one issuer. It keeps everything in a folder, the book, and signs with the issuer's .p12:
+- **A mark and a name**: `MarkLogo(mark=Path("mark.svg"), name=Path("name.svg"), font=Path("Brand.ttf"))`. The mark is an SVG of rectangles and straight paths; the name is an SVG `<text>` whose runs carry their colours (a `<tspan>` for a second colour), set in the font given. They sit as a lockup: for a mark 28 high the name is 17 and the gap 8, the proportion `name_size` and `gap` change, and the name's own glyphs (ascenders and descenders included) are centred on the mark.
+- **A picture**: `ImageLogo(Path("logo.png"))`, drawn at the logo's height keeping its proportions. `ImageLogo(path, one_ink_path=Path("logo-black.png"))` gives the thermal strip its own black version.
+- **No logo**: leave `logo` out and the issuer's box takes the space.
 
-```bash
-pip install "ecuador-einvoicing[mcp] @ git+https://github.com/jahirxtrap/ecuador-einvoicing"
-claude mcp add --scope user einvoicing \
-  -e EINVOICING_BOOK=/path/to/book \
-  -e EINVOICING_P12=/path/to/signature.p12 \
-  -e EINVOICING_P12_PASSWORD=... \
-  -- ecuador-einvoicing-mcp
+On the A4 page the logo goes above the issuer's box, in colour. On the strip it goes on top, in one ink.
+
+### Labels
+
+`default_labels()` holds the Spanish words the SRI prints. To change them, copy `src/eqinvoice/labels/es.json`, edit the values and pass `labels=read_labels(Path("labels.json"))` to `render`. The keys stay as they are.
+
+---
+
+## Claude Code plugin
+
+```
+/plugin install eqinvoice --marketplace jahirxtrap/eqinvoice
 ```
 
-- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point; the legal name, the address and the accounting duty come from the SRI's registry. `look_up_taxpayer` shows any RUC.
+Or add the marketplace once and install it from there:
+
+```bash
+claude plugin marketplace add jahirxtrap/eqinvoice
+claude plugin install eqinvoice@eqinvoice
+```
+
+On enabling it, Claude Code asks for the book folder, the .p12 signature and its password; the password goes to the system's secure storage. The plugin starts the [MCP server](#mcp-server) with `uvx` from PyPI (it needs [uv](https://docs.astral.sh/uv/)): the first start installs it, later ones take a couple of seconds. Its tools show up as `mcp__plugin_eqinvoice_eqinvoice__*`.
+
+## MCP server
+
+`eqinvoice-mcp` serves one issuer over stdio. It keeps everything in a folder, the book, and signs with the issuer's .p12. Without the plugin, register it by hand:
+
+```bash
+claude mcp add --scope user eqinvoice \
+  -e EQINVOICE_BOOK=/path/to/book \
+  -e EQINVOICE_P12=/path/to/signature.p12 \
+  -e EQINVOICE_P12_PASSWORD=... \
+  -- uvx --from "eqinvoice[mcp]" eqinvoice-mcp
+```
+
+- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point. The legal name, the address and the accounting duty come from the SRI's registry.
 - **Clients**: `register_client` keeps a buyer and its email. A RUC is named as the registry holds it; a cédula or a passport brings its name.
-- **Drafts**: `draft_invoice` and `draft_credit_note` (the whole invoice, or the lines given) answer with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI yet.
-- **Issuing**: `issue_draft` numbers the draft, signs it, sends it and files it as the SRI leaves it: `authorized` (with its record and its printed copy), `refused` (with the SRI's messages) or `pending`. `check_voucher` asks again for a pending one.
+- **Drafts first**: every voucher starts as a draft with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI until the draft is issued.
+- **Issuing**: `issue_draft` numbers the draft, signs it, sends it and files it as the SRI leaves it: `authorized` (with its record and its printed copy), `refused` (with the SRI's messages) or `pending`, which `check_voucher` asks for again.
 - **Numbering**: each environment, kind, establishment and point numbers its own series, and a number is taken for good once a voucher is signed with it.
 
-The book holds `profile.json`, `clients/`, `drafts/` and `vouchers/<environment>/<kind>/<number>/` (`signed.xml`, `authorized.xml`, `printed.pdf`, `refused.json`). A `brand/` folder gives the printed copies their logo: `mark.svg`, `name.svg` and a `.ttf` for a mark and a name, or `logo.png`.
+<details>
+<summary><b>Tools</b></summary>
+
+| Tool | What it does |
+|---|---|
+| `look_up_taxpayer` | A RUC as the SRI's registry holds it |
+| `configure_issuer` | Who issues, from which establishment and point, in which environment |
+| `show_issuer` | The issuer as it is configured |
+| `register_client`, `list_clients`, `forget_client` | The clients in the book |
+| `draft_invoice` | An invoice for a client, with its printed preview |
+| `draft_credit_note` | A credit note against an authorized invoice, whole or by lines |
+| `list_drafts`, `discard_draft` | The drafts waiting to be issued |
+| `issue_draft` | The approved draft numbered, signed and sent to the SRI |
+| `list_vouchers` | Every voucher numbered in the current environment |
+| `check_voucher` | A pending voucher sent again and asked for |
+
+</details>
+
+<details>
+<summary><b>The book</b></summary>
+
+| Path | What it holds |
+|---|---|
+| `profile.json` | The issuer, its establishment and point, and the environment |
+| `clients/<identification>.json` | One client each |
+| `drafts/<id>.json`, `drafts/<id>.pdf` | A draft and its printed preview |
+| `vouchers/<environment>/<kind>/<number>/` | `signed.xml`, then `authorized.xml` and `printed.pdf`, or `refused.json` |
+| `brand/` | The logo of the printed copies: `mark.svg`, `name.svg` and a `.ttf`, or `logo.png`. An optional `lockup.json` (`{"name_size": 0.76}`) sizes the name or the gap for this brand |
+
+</details>
+
+<details>
+<summary><b>Environment variables</b></summary>
+
+| Variable | What it does |
+|---|---|
+| `EQINVOICE_BOOK` | The folder the server keeps the book in |
+| `EQINVOICE_P12` | The issuer's .p12 signature |
+| `EQINVOICE_P12_PASSWORD` | Its password |
+
+</details>
+
+---
 
 ## Development
 
@@ -178,17 +248,19 @@ python3.11 -m venv .venv
 .venv/bin/pytest
 ```
 
-`scripts/smoke_sri.py` makes a real round trip against the SRI's test environment: it signs a $1.00 invoice to a final consumer, sends it, waits for the authorization, reads it back and prints both layouts. It needs the issuer's data in a JSON file and the .p12 in the environment:
+Two scripts drive the live services:
 
 ```bash
-EINVOICING_P12=signature.p12 EINVOICING_P12_PASSWORD=... \
+EQINVOICE_P12=signature.p12 EQINVOICE_P12_PASSWORD=... \
   .venv/bin/python scripts/smoke_sri.py setup.json out
-```
-
-`setup.json` holds `issuer` (the `Issuer` fields), `establishment`, `point` and `establishment_address`. Use an emission point no other system numbers with, so its sequentials never collide.
-
-`scripts/smoke_registry.py` looks a RUC up in the SRI's live registry and prints the taxpayer, its establishments and the issuer it would be:
-
-```bash
 .venv/bin/python scripts/smoke_registry.py 1791234567001
 ```
+
+- **`smoke_sri.py`**: a real round trip against the SRI's test environment. It signs a $1.00 invoice to a final consumer, sends it, waits for the authorization, reads it back and prints both layouts. `setup.json` holds `issuer` (the `Issuer` fields), `establishment`, `point` and `establishment_address`; use an emission point no other system numbers with.
+- **`smoke_registry.py`**: a RUC looked up in the SRI's live registry, with its establishments and the issuer it would be.
+
+A tag (`1.2.0`) publishes that version to PyPI and opens its release with `CHANGELOG.md`. The version lives in `pyproject.toml` and, the same, in the plugin's manifest, its marketplace entry and the package its `.mcp.json` launches; `tests/test_plugin.py` keeps them in agreement.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

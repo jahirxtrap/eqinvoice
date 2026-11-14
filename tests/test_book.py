@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import shutil
 
-from ecuador_einvoicing import Environment, VoucherKind
-from ecuador_einvoicing.ride import ImageLogo, MarkLogo
-from ecuador_einvoicing_mcp.book import Book
+from eqinvoice import Environment, VoucherKind
+from eqinvoice.ride import ImageLogo, MarkLogo
+from eqinvoice_mcp.book import Book
 from tests.builders import FIXTURES, a_voucher
 
 
@@ -36,3 +36,17 @@ def test_the_brand_folder_gives_the_logo(tmp_path):
     for name in ("mark.svg", "name.svg", "PlusJakartaSans-ExtraBold.ttf"):
         shutil.copy(FIXTURES / name, brand / name)
     assert isinstance(book.logo(), MarkLogo)
+
+
+def test_a_brand_can_size_its_own_name(tmp_path):
+    book = Book(tmp_path)
+    brand = tmp_path / "brand"
+    brand.mkdir()
+    for name in ("mark.svg", "name.svg", "PlusJakartaSans-ExtraBold.ttf"):
+        shutil.copy(FIXTURES / name, brand / name)
+    standard = book.logo()
+    (brand / "lockup.json").write_text('{"name_size": 0.76}')
+    sized = book.logo()
+    assert isinstance(standard, MarkLogo) and isinstance(sized, MarkLogo)
+    assert sized.name_size == 0.76 and sized.gap == standard.gap
+    assert standard.name_size != 0.76

@@ -5,9 +5,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-BOOK = "EINVOICING_BOOK"
-SIGNATURE = "EINVOICING_P12"
-PASSWORD = "EINVOICING_P12_PASSWORD"
+BOOK = "EQINVOICE_BOOK"
+SIGNATURE = "EQINVOICE_P12"
+PASSWORD = "EQINVOICE_P12_PASSWORD"
 
 
 class SettingsMissing(RuntimeError):
