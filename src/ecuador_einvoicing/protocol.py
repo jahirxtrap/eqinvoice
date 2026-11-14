@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -42,6 +43,17 @@ BUYER_CODES = {
 FINAL_CONSUMER_ID = "9999999999999"
 FINAL_CONSUMER_NAME = "CONSUMIDOR FINAL"
 VAT_TAX = "2"
+VAT_RATES = {
+    "0": Decimal("0"),
+    "2": Decimal("12"),
+    "3": Decimal("14"),
+    "4": Decimal("15"),
+    "5": Decimal("5"),
+    "6": Decimal("0"),
+    "7": Decimal("0"),
+    "8": Decimal("8"),
+    "10": Decimal("13"),
+}
 ICE_TAX = "3"
 IRBPNR_TAX = "5"
 CURRENCY_NAME = "DOLAR"
@@ -60,6 +72,21 @@ AUTHORIZED = "AUTORIZADO"
 NOT_AUTHORIZED = "NO AUTORIZADO"
 ALREADY_REGISTERED = "43"
 STILL_PROCESSING = "70"
+
+REGISTRY_HOST = "https://srienlinea.sri.gob.ec"
+TAXPAYER_PATH = (
+    "/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerosRuc"
+)
+ESTABLISHMENTS_PATH = (
+    "/sri-catastro-sujeto-servicio-internet/rest/Establecimiento/consultarPorNumeroRuc"
+)
+REGISTRY_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Safari/537.36",
+    "Accept": "application/json",
+}
+ACTIVE_TAXPAYER = "ACTIVO"
+OPEN_ESTABLISHMENT = "ABIERTO"
+RIMPE_REGIME = "RIMPE"
 
 PARSER = etree.XMLParser(
     no_network=True, resolve_entities=False, load_dtd=False, remove_blank_text=False

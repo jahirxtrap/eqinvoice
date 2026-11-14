@@ -9,12 +9,14 @@ from ecuador_einvoicing import (
     Buyer,
     BuyerKind,
     Environment,
+    Establishment,
     Issued,
     Issuer,
     Line,
     Modified,
     Payment,
     SimulatedSri,
+    Taxpayer,
     Voucher,
     VoucherKind,
     access_key,
@@ -45,6 +47,26 @@ def an_issuer(**overrides: Any) -> Issuer:
         "system_provider_ruc": RUC,
     }
     return Issuer(**{**fields, **overrides})
+
+
+def a_taxpayer(**overrides: Any) -> Taxpayer:
+    fields: dict[str, Any] = {
+        "ruc": RUC,
+        "legal_name": "ACME COMERCIAL S.A.S.",
+        "active": True,
+        "regime": "GENERAL",
+        "keeps_accounts": True,
+        "withholding_agent": False,
+        "special_taxpayer": False,
+        "activity": "VENTA AL POR MAYOR DE COMPUTADORAS",
+        "establishments": (
+            Establishment("001", "LOJA / LOJA / SUCRE / AV. UNIVERSITARIA 10-20", None, True, True),
+            Establishment(
+                "002", "LOJA / LOJA / EL VALLE / AV. SALVADOR BUSTAMANTE", None, False, False
+            ),
+        ),
+    }
+    return Taxpayer(**{**fields, **overrides})
 
 
 def a_line(**overrides: Any) -> Line:

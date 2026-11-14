@@ -94,19 +94,28 @@ def _payments(info: etree._Element) -> tuple[Payment, ...]:
     )
 
 
-def read(record: str) -> Issued:
-    held = etree.fromstring(record.encode(), PARSER)
-    root = etree.fromstring(_text(held, "comprobante").encode(), PARSER)
+def _parts(
+    root: etree._Element,
+) -> tuple[VoucherKind, etree._Element, etree._Element, dict[str, str]]:
     kind = next((name for name, tag in ROOTS.items() if tag == root.tag), None)
     tributaria = root.find("infoTributaria")
     info = root.find(INFO[kind]) if kind else None
-    authorized_at = _text(held, "fechaAutorizacion")
-    if kind is None or tributaria is None or info is None or not authorized_at:
-        raise VoucherInvalid("The record holds no authorized invoice or credit note")
+    if kind is None or tributaria is None or info is None:
+        raise VoucherInvalid("The document holds no invoice or credit note")
     extra = {
         field.get("nombre", ""): (field.text or "")
         for field in root.iterfind("infoAdicional/campoAdicional")
     }
+    return kind, tributaria, info, extra
+
+
+def _voucher(
+    root: etree._Element,
+    kind: VoucherKind,
+    tributaria: etree._Element,
+    info: etree._Element,
+    extra: dict[str, str],
+) -> Voucher:
     environments = {code: name for name, code in ENVIRONMENT_CODES.items()}
     modified = (
         Modified(
@@ -117,7 +126,7 @@ def read(record: str) -> Issued:
         if kind == VoucherKind.CREDIT_NOTE
         else None
     )
-    voucher = Voucher(
+    return Voucher(
         kind=kind,
         environment=environments.get(_text(tributaria, "ambiente"), Environment.TEST),
         access_key=_text(tributaria, "claveAcceso"),
@@ -136,6 +145,22 @@ def read(record: str) -> Issued:
             if name not in (EMAIL_FIELD, SYSTEM_PROVIDER_FIELD)
         ),
     )
+
+
+def read_voucher(document: bytes) -> Voucher:
+    """The voucher a signed or unsigned document carries."""
+    root = etree.fromstring(document, PARSER)
+    return _voucher(root, *_parts(root))
+
+
+def read(record: str) -> Issued:
+    held = etree.fromstring(record.encode(), PARSER)
+    authorized_at = _text(held, "fechaAutorizacion")
+    if not authorized_at:
+        raise VoucherInvalid("The record holds no authorized invoice or credit note")
+    root = etree.fromstring(_text(held, "comprobante").encode(), PARSER)
+    kind, tributaria, info, extra = _parts(root)
+    voucher = _voucher(root, kind, tributaria, info, extra)
     issuer = Issuer(
         legal_name=_text(tributaria, "razonSocial"),
         ruc=_text(tributaria, "ruc"),

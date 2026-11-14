@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from ecuador_einvoicing import Payment, VoucherInvalid, VoucherKind, read
-from tests.builders import RUC, a_voucher, authorized
+from ecuador_einvoicing import Payment, VoucherInvalid, VoucherKind, read, read_voucher
+from tests.builders import RUC, a_voucher, authorized, signed
 
 
 def test_the_record_reads_back_as_the_voucher_it_holds():
@@ -32,6 +32,11 @@ def test_an_invoice_reads_its_tip_and_other_taxes_a_credit_note_no_tip():
 def test_a_credit_note_reads_the_invoice_it_modifies():
     voucher = a_voucher(VoucherKind.CREDIT_NOTE)
     assert read(authorized(voucher)).voucher.modified == voucher.modified
+
+
+def test_a_signed_document_reads_back_as_the_voucher_it_carries():
+    voucher = a_voucher(VoucherKind.CREDIT_NOTE)
+    assert read_voucher(signed(voucher)) == voucher
 
 
 def test_a_record_with_no_voucher_inside_is_refused():

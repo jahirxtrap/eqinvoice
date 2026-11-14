@@ -12,11 +12,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = [
+    "mcp>=2.3",
+]
 dev = [
+    "mcp>=2.3",
     "mypy>=2.4",
     "pytest>=9.1",
     "ruff>=0.17",
 ]
+
+[project.scripts]
+ecuador-einvoicing-mcp = "ecuador_einvoicing_mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=75.0"]
