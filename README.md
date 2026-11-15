@@ -5,8 +5,9 @@
 Every electronic voucher of **Ecuador's SRI** (offline scheme): invoices, credit and debit notes,
 purchase settlements, remission guides and withholdings. Build the voucher, sign it XAdES-BES with
 the issuer's .p12, send it alone or in a lote, read the authorization back and print the RIDE. Use
-it as a **library** inside your own system, or as an **MCP server** that lets an assistant draft,
-preview, issue and follow one issuer's vouchers.
+it as a **library** inside your own system, as an **MCP server** that lets an assistant draft,
+preview, issue and follow one issuer's vouchers, or as the **Claude Code plugin** that sets that
+server up in one step.
 
 <p align="center">
   <a href="https://pypi.org/project/eqinvoice/">PyPI</a> ·
@@ -38,6 +39,7 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
 - **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable, out of date, not for signing or another taxpayer's. A .p12 holding a key to encipher besides the one to sign, as the Banco Central del Ecuador issues them, signs with the key whose certificate is for digital signature. The certificate's issuer is written as Java writes it, the way the SRI's validator compares it.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
+- **Reading back**: an authorized record or a signed document, from this library or any other signer, read back as the voucher it carries, withholdings of the older 1.0.0 format included.
 - **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime and RIMPE category, accounting duty, establishments and their trade names), and the issuer its vouchers name, with the legend of its regime.
 - **SRI catalogs**: the payment forms as `PaymentForm`, the IVA rates by their codes, and voucher numbers written as the SRI prints them.
 - **Priced lines**: a line's subtotal and IVA worked out to the cent from its quantity, unit price, discount and the SRI's rate code.
@@ -302,19 +304,21 @@ claude mcp add --scope user eqinvoice \
 python3.11 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/ruff check src tests scripts
+.venv/bin/ruff format --check src tests scripts
 .venv/bin/mypy
 .venv/bin/pytest
+claude plugin validate . && claude plugin validate plugin
 ```
 
 Two scripts drive the live services:
 
 ```bash
 EQINVOICE_P12=signature.p12 EQINVOICE_P12_PASSWORD=... \
-  .venv/bin/python scripts/smoke_sri.py setup.json out
+  .venv/bin/python scripts/smoke_sri.py setup.json out [kind ... | lote]
 .venv/bin/python scripts/smoke_registry.py 1791234567001
 ```
 
-- **`smoke_sri.py`**: a real round trip against the SRI's test environment. It signs a $1.00 invoice to a final consumer, sends it, waits for the authorization, reads it back and prints both layouts. `setup.json` holds `issuer` (the `Issuer` fields), `establishment`, `point` and `establishment_address`; use an emission point no other system numbers with.
+- **`smoke_sri.py`**: a real round trip against the SRI's test environment. It signs each kind asked for (an `invoice` of $1.00 to a final consumer when none is), sends it, waits for the authorization, reads it back and prints both layouts; `lote` sends two invoices at once. It pauses between calls so as not to flood the SRI. `setup.json` holds `issuer` (the `Issuer` fields), `establishment`, `point` and `establishment_address`; the other kinds also take `party`, `supplier` and `carrier` (`kind`, `identification`, `name`, `address`), `plate`, `purchase` (the number of a purchase to withhold on) and `invoice` (an authorized invoice's `number`, `issued_on` and `access_key`). Use an emission point no other system numbers with.
 - **`smoke_registry.py`**: a RUC looked up in the SRI's live registry, with its establishments and the issuer it would be.
 
 A tag (`1.2.0`) publishes that version to PyPI and opens its release with `CHANGELOG.md`. The version lives in `pyproject.toml` and, the same, in the plugin's manifest, its marketplace entry and the package its `.mcp.json` launches; `tests/test_plugin.py` keeps them in agreement.

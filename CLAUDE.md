@@ -39,10 +39,12 @@ src/eqinvoice/
   pricing.py      price_line, tax_on and withhold: lines, IVA and retentions to the cent
   sales.py        period_sales: a period's vouchers per IVA rate, as the IVA declaration asks
   document.py     the XML builder of every kind, the XSD check and the RIMPE legends
-  signature.py    the .p12 credential (the key that signs, past one that enciphers) and XAdES-BES
+  signature.py    the .p12 credential (the key that signs, past one that enciphers), the RUCs its
+                  certificate names, and XAdES-BES with the issuer written as Java writes it
   service.py      the SRI's reception and authorization web services, lotes, and SimulatedSri
   registry.py     the SRI's taxpayer registry, SimulatedRegistry and Taxpayer.issuer()
-  record.py       an authorized record read back as Issued; read_voucher for a signed document
+  record.py       an authorized record read back as Issued; read_voucher for a signed document,
+                  from any signer, a 1.0.0 withholding included
   errors.py       SriUnavailable, VoucherInvalid, CredentialRefused and its problems
   schemas/        the SRI's XSDs, as published
   labels/es.json  the printed words, as data
@@ -56,8 +58,11 @@ src/eqinvoice_mcp/
                   Filed, Standing, SalesReport
   server.py       the tools, their hints, and anticipated failures turned into ToolError
   icon.svg        the server's icon
-plugin/           .claude-plugin/plugin.json (with its userConfig) and .mcp.json (uvx from PyPI)
-tests/            one test_<capability>.py per module; builders.py holds the shared builders
+plugin/           .claude-plugin/plugin.json (with its userConfig), .mcp.json (uvx from PyPI) and
+                  assets/icon.svg, the server's icon
+tests/            one test_<capability>.py per module; builders.py holds the shared builders;
+                  fixtures/ a .p12 with two keys as the BCE issues them, the logo files, and
+                  bryancalisto/, vouchers another signer wrote (MIT, its license beside them)
 scripts/          smoke_sri.py and smoke_registry.py, the live round trips
 .github/          ci.yml (checks and plugin validation), release.yml (PyPI and the release), assets/
 ```
@@ -67,7 +72,8 @@ scripts/          smoke_sri.py and smoke_registry.py, the live round trips
 The version is written in four places that must agree, and `tests/test_plugin.py` fails when they
 do not: `pyproject.toml`, `plugin/.claude-plugin/plugin.json`, its entry in
 `.claude-plugin/marketplace.json`, and the `eqinvoice[mcp]==<version>` that `plugin/.mcp.json`
-launches. The plugin's description and keywords are the same in the manifest and the marketplace.
+launches. The plugin's description and keywords are the same in the manifest and the marketplace,
+and its `assets/icon.svg` is the server's `icon.svg`, byte for byte.
 
 A release is one commit named `v<x.y.z>` that bumps those four and replaces `CHANGELOG.md` (no
 headers, versions or dates; one bullet per change, as what a user sees). Its tag is unprefixed
