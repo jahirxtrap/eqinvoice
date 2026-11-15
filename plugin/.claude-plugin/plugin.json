@@ -1,6 +1,6 @@
 {
   "name": "eqinvoice",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Electronic invoices and credit notes for Ecuador's SRI: clients looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
   "author": {
     "name": "jahirtrap",

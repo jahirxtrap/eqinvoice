@@ -1,6 +1,6 @@
 [project]
 name = "eqinvoice"
-version = "1.1.4"
+version = "1.1.5"
 description = "Electronic invoices and credit notes for Ecuador's SRI: build, sign, send, authorize and print, as a library or an MCP server."
 readme = "README.md"
 requires-python = ">=3.11"

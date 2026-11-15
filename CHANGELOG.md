@@ -1,3 +1,2 @@
-- Fixed the RIMPE legend of a popular business, which carried the entrepreneur's: the registry's RIMPE category now reaches the issuer, its vouchers, its printed copies and the records read back, and the check before sending admits the legend the SRI's ficha técnica requires
-- Added `PaymentForm`, the SRI's table of payment forms, for `Payment.form`: a record with a code outside it is refused, and `draft_invoice` offers only those codes
-- Added `voucher_number`, which writes a voucher's number as the SRI prints it
+- Fixed signing with a .p12 from the Banco Central del Ecuador, which holds a key to encipher before the one to sign: vouchers were signed with the enciphering certificate and the SRI refused them with error 39, «el certificado utilizado no es del tipo firma digital». The signature now uses the key whose certificate is for digital signature
+- Added the `not_for_signing` problem, for a .p12 none of whose certificates can sign
