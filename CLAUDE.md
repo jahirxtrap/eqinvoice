@@ -1,7 +1,8 @@
 # EQinvoice
 
-Electronic invoices and credit notes for Ecuador's SRI (offline scheme, version 1.1.0), published
-on PyPI as `eqinvoice`. The visible name is **EQinvoice**; everything technical is `eqinvoice`.
+Every electronic voucher of Ecuador's SRI (offline scheme): invoices, credit and debit notes,
+purchase settlements, remission guides and withholdings, alone or in a lote. Published on PyPI as
+`eqinvoice`. The visible name is **EQinvoice**; everything technical is `eqinvoice`.
 
 **One repository, three ways to use it:**
 
@@ -29,26 +30,30 @@ The library never imports the MCP package; the MCP package only uses the library
 
 ```
 src/eqinvoice/
-  model.py        the voucher in the SRI's terms, PaymentForm and voucher_number; totals, tax
-                  groups and payment forms derive here
-  protocol.py     every SRI code, rate, name, namespace and address, the XML parser and text_at
-  access_key.py   the 49-digit access key and the issue date on the SRI's clock
-  pricing.py      price_line: a line's subtotal and IVA to the cent
+  model.py        the vouchers in the SRI's terms: Numbered, then Voucher (the priced kinds),
+                  RemissionGuide and Withholding (AnyVoucher); PaymentForm, RetentionTax and
+                  voucher_number; totals, tax groups, payment forms and withheld values derive here
+  protocol.py     every SRI code, rate, name, namespace and address, the tables per kind (schema,
+                  root, info tag, party, totals), the XML parser and text_at
+  access_key.py   the 49-digit access key, also a lote's, and the issue date on the SRI's clock
+  pricing.py      price_line, tax_on and withhold: lines, IVA and retentions to the cent
   sales.py        period_sales: a period's vouchers per IVA rate, as the IVA declaration asks
-  document.py     the XML builder, the XSD check and the RIMPE legends (issuer_legend)
-  signature.py    the .p12 credential and the XAdES-BES signature
-  service.py      the SRI's reception and authorization web services, and SimulatedSri
+  document.py     the XML builder of every kind, the XSD check and the RIMPE legends
+  signature.py    the .p12 credential (the key that signs, past one that enciphers) and XAdES-BES
+  service.py      the SRI's reception and authorization web services, lotes, and SimulatedSri
   registry.py     the SRI's taxpayer registry, SimulatedRegistry and Taxpayer.issuer()
   record.py       an authorized record read back as Issued; read_voucher for a signed document
   errors.py       SriUnavailable, VoucherInvalid, CredentialRefused and its problems
   schemas/        the SRI's XSDs, as published
   labels/es.json  the printed words, as data
-  ride/           the printed copy: labels.py, logo.py (ImageLogo, MarkLogo), pdf.py (render)
+  ride/           the printed copy of every kind: labels.py, logo.py (ImageLogo, MarkLogo), pdf.py
 src/eqinvoice_mcp/
   settings.py     the only reader of the environment: EQINVOICE_BOOK, EQINVOICE_P12, its password
   book.py         the only module that touches disk: the book's files and the numbering
-  desk.py         the decisions: issuer, clients, drafts with their preview, issuing, checking
-  model.py        Profile, Draft, Previewed, Filed, Standing, SalesReport
+  desk.py         the decisions: issuer, parties, drafts of every kind with their preview,
+                  issuing, checking
+  model.py        Profile, Draft (the voucher, numbered when issued), LegacyDraft (1.1's), Previewed,
+                  Filed, Standing, SalesReport
   server.py       the tools, their hints, and anticipated failures turned into ToolError
   icon.svg        the server's icon
 plugin/           .claude-plugin/plugin.json (with its userConfig) and .mcp.json (uvx from PyPI)
@@ -92,8 +97,9 @@ scripts in `scripts/`.
    cannot say it (a contract, a unit, a behaviour that is not obvious), never on a module and never
    to repeat a name. The MCP tools keep theirs: they are the descriptions the client reads.
 3. **One home per fact.**
-   - An SRI code, rate or name lives in `protocol.py`; the payment table is `PaymentForm` in
-     `model.py`, whose values are the SRI's codes.
+   - An SRI code, rate or name lives in `protocol.py`; the payment, retention tax and subject
+     tables are `PaymentForm`, `RetentionTax` and `SubjectType` in `model.py`, whose values are
+     the SRI's codes. A schema's version is read from its file name.
    - A voucher's number is written by `voucher_number`, and its sequential by `sequential_code`.
    - A total is derived in `model.py` (`subtotal`, `vat`, `total`, `tax_groups`, `payment_forms`),
      and the XML, the RIDE and the MCP read it from there.
@@ -119,9 +125,12 @@ scripts in `scripts/`.
 
 ## Extending
 
-- **A new voucher kind**: one more `VoucherKind`, its entries in `protocol.py` (document code, root,
-  info tag, schema, code tag), the builder and reader branches, its labels and its tests. The book
-  gives it its own series on its own.
+- **A new voucher kind**: one more `VoucherKind`; its entries in `protocol.py` (`SCHEMAS`,
+  `DOCUMENT_CODES`, `ROOTS`, `INFO`, and `PARTIES`, `CODE_TAGS`, `TOTAL_TAGS` or `TAX_TOTALS`
+  where they apply); a type on `Numbered` if `Voucher` does not fit it; its branches in
+  `document.build` and `record._voucher`; its labels and its RIDE body; a desk draft and a tool;
+  and `a_document` in the tests' builders, which puts it through the round trip of
+  `test_record`. The book gives it its own series on its own.
 - **A new label language**: a new JSON file of the same shape; no code change.
 - **A new logo kind**: a class with `flowable(height, one_ink) -> Flowable`; `render` takes any `Logo`.
 - **A new tool**: a method on `Desk` with its decision, then a thin `@tool(<hints>)` in `server.py`

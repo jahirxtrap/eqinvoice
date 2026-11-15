@@ -9,16 +9,16 @@ from typing import TypeVar
 from pydantic import TypeAdapter
 
 from eqinvoice import (
+    AnyVoucher,
     Buyer,
     Environment,
     Message,
-    Voucher,
     VoucherKind,
     read_voucher,
     voucher_number,
 )
 from eqinvoice.ride import ImageLogo, Logo, MarkLogo
-from eqinvoice_mcp.model import Draft, Filed, Lockup, Profile, Standing
+from eqinvoice_mcp.model import Draft, Filed, LegacyDraft, Lockup, Profile, Standing
 
 PROFILE = "profile.json"
 CLIENTS = "clients"
@@ -41,7 +41,7 @@ INDENT = 2
 PROFILES = TypeAdapter(Profile)
 LOCKUP = TypeAdapter(Lockup)
 CLIENT = TypeAdapter(Buyer)
-DRAFT = TypeAdapter(Draft)
+DRAFT: TypeAdapter[Draft | LegacyDraft] = TypeAdapter(Draft | LegacyDraft)
 MESSAGES = TypeAdapter(tuple[Message, ...])
 
 Held = TypeVar("Held")
@@ -62,6 +62,10 @@ def _load(path: Path, adapter: TypeAdapter[Held], missing: str) -> Held:
     if not path.is_file():
         raise NotInBook(missing)
     return adapter.validate_json(path.read_bytes())
+
+
+def _current(held: Draft | LegacyDraft) -> Draft:
+    return held.upgraded() if isinstance(held, LegacyDraft) else held
 
 
 class Book:
@@ -103,11 +107,14 @@ class Book:
         return self.root / DRAFTS / f"{identifier}{suffix}"
 
     def draft(self, identifier: str) -> Draft:
-        return _load(self._draft(identifier, DATA), DRAFT, f"No draft {identifier} in the book")
+        return _current(
+            _load(self._draft(identifier, DATA), DRAFT, f"No draft {identifier} in the book")
+        )
 
     def drafts(self) -> tuple[Draft, ...]:
         held = (
-            DRAFT.validate_json(path.read_bytes()) for path in (self.root / DRAFTS).glob(f"*{DATA}")
+            _current(DRAFT.validate_json(path.read_bytes()))
+            for path in (self.root / DRAFTS).glob(f"*{DATA}")
         )
         return tuple(sorted(held, key=lambda draft: draft.created_at))
 
@@ -128,7 +135,7 @@ class Book:
     def _shelf(self, environment: Environment, kind: VoucherKind) -> Path:
         return self.root / VOUCHERS / environment.value / kind.value
 
-    def _folder(self, voucher: Voucher) -> Path:
+    def _folder(self, voucher: AnyVoucher) -> Path:
         return self._shelf(voucher.environment, voucher.kind) / voucher.number
 
     def next_sequential(
@@ -156,18 +163,18 @@ class Book:
             return self.reserve(environment, kind, establishment, point)
         return sequential
 
-    def release(self, voucher: Voucher) -> None:
+    def release(self, voucher: AnyVoucher) -> None:
         self._folder(voucher).rmdir()
 
-    def keep_signed(self, voucher: Voucher, document: bytes) -> None:
+    def keep_signed(self, voucher: AnyVoucher, document: bytes) -> None:
         _write(self._folder(voucher) / SIGNED, document)
 
-    def keep_authorized(self, voucher: Voucher, record: str, printed: bytes) -> None:
+    def keep_authorized(self, voucher: AnyVoucher, record: str, printed: bytes) -> None:
         folder = self._folder(voucher)
         _write(folder / PRINTED, printed)
         _write(folder / AUTHORIZED, record.encode())
 
-    def keep_refused(self, voucher: Voucher, messages: tuple[Message, ...]) -> None:
+    def keep_refused(self, voucher: AnyVoucher, messages: tuple[Message, ...]) -> None:
         _write(self._folder(voucher) / REFUSED, MESSAGES.dump_json(messages, indent=INDENT))
 
     def filed(self, environment: Environment, kind: VoucherKind, number: str) -> Filed:

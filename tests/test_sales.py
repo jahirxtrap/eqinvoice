@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from eqinvoice import VoucherInvalid, VoucherKind, period_sales, price_line
-from tests.builders import a_voucher
+from tests.builders import a_document, a_voucher
 
 SERVICE = price_line("1", "Desarrollo", Decimal("1"), Decimal("500"), "4")
 EXEMPT = price_line("2", "Capacitacion", Decimal("1"), Decimal("80"), "7")
@@ -43,3 +43,18 @@ def test_a_period_without_vouchers_adds_up_to_nothing():
 def test_a_period_that_ends_before_it_starts_is_refused():
     with pytest.raises(VoucherInvalid):
         period_sales((), date(2026, 11, 30), date(2026, 11, 1))
+
+
+def test_a_debit_note_adds_to_the_sales_and_what_is_no_sale_stays_out():
+    day = date(2026, 11, 20)
+    vouchers = (
+        a_voucher(issued_on=day, lines=(SERVICE,)),
+        a_voucher(VoucherKind.DEBIT_NOTE, issued_on=day, lines=(REFUND,)),
+        a_voucher(VoucherKind.PURCHASE_SETTLEMENT, issued_on=day, lines=(SERVICE,)),
+        a_document(VoucherKind.REMISSION_GUIDE, issued_on=day),
+        a_document(VoucherKind.WITHHOLDING, issued_on=day),
+    )
+    sales = period_sales(vouchers, *NOVEMBER)
+    assert (sales.invoices, sales.debit_notes, sales.credit_notes) == (1, 1, 0)
+    (taxed,) = sales.rates
+    assert (taxed.gross, taxed.net, taxed.vat) == (Decimal("600"), Decimal("600"), Decimal("90"))

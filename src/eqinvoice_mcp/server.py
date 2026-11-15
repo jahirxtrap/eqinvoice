@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from functools import cache, wraps
@@ -14,22 +15,32 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from eqinvoice import (
+    Abroad,
     Buyer,
     CredentialRefused,
     Environment,
+    GuideItem,
     Line,
+    Payment,
     PaymentForm,
+    Recipient,
+    Reference,
+    RetentionTax,
     SriRegistry,
     SriUnavailable,
     SriWebServices,
+    SubjectType,
+    SupportDocument,
     Taxpayer,
     VoucherInvalid,
     VoucherKind,
     price_line,
     read_credential,
+    tax_on,
+    withhold,
 )
 from eqinvoice.model import ZERO
-from eqinvoice.protocol import VAT_RATES
+from eqinvoice.protocol import VAT_RATES, VAT_RETENTION_RATES
 from eqinvoice.ride import default_labels
 from eqinvoice_mcp.book import Book, NotInBook
 from eqinvoice_mcp.desk import Desk, Refused
@@ -41,7 +52,8 @@ TITLE = "EQinvoice"
 ICON = Path(__file__).with_name("icon.svg")
 ICON_TYPE = "image/svg+xml"
 INSTRUCTIONS = (
-    "Electronic invoices and credit notes for Ecuador's SRI, issued by the configured issuer. "
+    "Electronic vouchers for Ecuador's SRI, issued by the configured issuer: invoices, credit "
+    "and debit notes, purchase settlements, remission guides and withholdings. "
     "Every voucher starts as a draft that comes with a printed preview (a PDF path) to show the "
     "user. Issue a draft only after the user approves that preview: an authorized voucher cannot "
     "be deleted, only offset by a credit note. A pending voucher is asked for again with "
@@ -74,6 +86,7 @@ VAT_CHOICES = _choices(
     }
 )
 PAYMENT_CHOICES = _choices(default_labels()["paymentForms"])
+RETENTION_CHOICES = _choices({code: f"{rate}%" for code, rate in VAT_RETENTION_RATES.items()})
 
 server = MCPServer(
     name=NAME,
@@ -136,6 +149,64 @@ class LineRequest(BaseModel):
     ] = None
 
 
+class ItemRequest(BaseModel):
+    description: str
+    quantity: Decimal
+    code: str | None = None
+    extra_code: str | None = None
+
+
+class RecipientRequest(BaseModel):
+    identification: str
+    name: str
+    address: Annotated[str, Field(description="Where the goods arrive")]
+    reason: Annotated[str, Field(description="Why they travel, such as Venta")]
+    items: list[ItemRequest]
+    invoice_number: Annotated[
+        str | None, Field(description="An authorized invoice of the book the goods were sold by")
+    ] = None
+    route: str | None = None
+    destination: Annotated[
+        str | None, Field(description="The destination establishment's code, such as 002")
+    ] = None
+    customs_document: str | None = None
+
+
+class TaxRequest(BaseModel):
+    base: Decimal
+    vat_rate_code: Annotated[str, Field(description=f"The SRI's IVA rate code: {VAT_CHOICES}")]
+
+
+class RetentionRequest(BaseModel):
+    tax: Annotated[RetentionTax, Field(description="1 = income tax; 2 = IVA; 6 = ISD")]
+    code: Annotated[
+        str,
+        Field(
+            description="The SRI's retention code: the ATS catalog's for income tax and ISD; "
+            f"for IVA {RETENTION_CHOICES}"
+        ),
+    ]
+    base: Decimal
+    percentage: Annotated[
+        Decimal | None, Field(description="Required for income tax and ISD; IVA takes its code's")
+    ] = None
+
+
+class SupportRequest(BaseModel):
+    support_code: Annotated[str, Field(description="The ATS catalog's support code, such as 01")]
+    number: Annotated[str, Field(description="The purchase's number: 001-001-000000001")]
+    issued_on: date
+    taxes: list[TaxRequest]
+    retentions: list[RetentionRequest]
+    document_code: Annotated[str, Field(description="Its SRI type code; 01 is an invoice")] = "01"
+    authorization: str | None = None
+    registered_on: date | None = None
+    payment_form: Annotated[
+        PaymentForm, Field(description=f"The SRI's payment form code: {PAYMENT_CHOICES}")
+    ] = DEFAULT_PAYMENT_FORM
+    abroad: Annotated[Abroad | None, Field(description="Only for a payment abroad")] = None
+
+
 @cache
 def _desk() -> Desk:
     settings = read_settings()
@@ -159,6 +230,41 @@ def _priced(lines: Sequence[LineRequest]) -> tuple[Line, ...]:
         )
         for position, line in enumerate(lines, start=1)
     )
+
+
+def _recipient(request: RecipientRequest) -> Recipient:
+    return Recipient(
+        identification=request.identification,
+        name=request.name,
+        address=request.address,
+        reason=request.reason,
+        items=tuple(
+            GuideItem(item.description, item.quantity, item.code, item.extra_code)
+            for item in request.items
+        ),
+        route=request.route,
+        destination=request.destination,
+        customs_document=request.customs_document,
+        supporting=_desk().reference(request.invoice_number) if request.invoice_number else None,
+    )
+
+
+def _support(request: SupportRequest) -> SupportDocument:
+    held = SupportDocument(
+        support_code=request.support_code,
+        document=Reference(
+            request.document_code, request.number, request.issued_on, request.authorization
+        ),
+        taxes=tuple(tax_on(tax.base, tax.vat_rate_code) for tax in request.taxes),
+        retentions=tuple(
+            withhold(retention.tax, retention.code, retention.base, retention.percentage)
+            for retention in request.retentions
+        ),
+        payments=(),
+        registered_on=request.registered_on,
+        abroad=request.abroad,
+    )
+    return replace(held, payments=(Payment(request.payment_form, held.total),))
 
 
 @tool(LOOKS_UP)
@@ -206,14 +312,22 @@ def show_issuer() -> Profile:
 
 @tool(KEEPS)
 def register_client(
-    identification: Annotated[str, Field(description="A RUC, a cédula or a passport number")],
+    identification: Annotated[
+        str, Field(description="A RUC, a cédula, a passport or a foreign tax number")
+    ],
     email: Annotated[
         str | None, Field(description="Where the client receives its vouchers")
     ] = None,
-    name: Annotated[str | None, Field(description="Required for a cédula or a passport")] = None,
+    name: Annotated[str | None, Field(description="Required for anything but a RUC")] = None,
+    address: Annotated[
+        str | None, Field(description="Printed on invoices and purchase settlements")
+    ] = None,
+    foreign: Annotated[
+        bool, Field(description="The identification is a foreign tax administration's")
+    ] = False,
 ) -> Buyer:
-    """A client kept in the book; a RUC is named as the SRI's registry holds it."""
-    return _desk().register_client(identification, email, name)
+    """A client, supplier, carrier or withheld party kept in the book; a RUC is named by the SRI."""
+    return _desk().register_client(identification, email, name, address, foreign)
 
 
 @tool(READS)
@@ -250,6 +364,73 @@ def draft_credit_note(
 ) -> Previewed:
     """A credit note drafted against an authorized invoice, with its printed preview."""
     return _desk().draft_credit_note(invoice_number, reason, _priced(lines or []))
+
+
+@tool(DRAFTS)
+def draft_debit_note(
+    invoice_number: Annotated[str, Field(description="An authorized invoice: 001-001-000000001")],
+    charges: Annotated[
+        list[LineRequest], Field(description="What is charged; each description is its reason")
+    ],
+    payment_form: Annotated[
+        PaymentForm, Field(description=f"The SRI's payment form code: {PAYMENT_CHOICES}")
+    ] = DEFAULT_PAYMENT_FORM,
+) -> Previewed:
+    """A debit note charging more on an authorized invoice, such as interest, with its preview."""
+    return _desk().draft_debit_note(invoice_number, _priced(charges), payment_form)
+
+
+@tool(DRAFTS)
+def draft_purchase_settlement(
+    supplier: Annotated[str, Field(description="The identification of a supplier in the book")],
+    lines: list[LineRequest],
+    payment_form: Annotated[
+        PaymentForm, Field(description=f"The SRI's payment form code: {PAYMENT_CHOICES}")
+    ] = DEFAULT_PAYMENT_FORM,
+) -> Previewed:
+    """A purchase settlement for a supplier who issues no vouchers, with its printed preview."""
+    return _desk().draft_purchase_settlement(supplier, _priced(lines), payment_form)
+
+
+@tool(DRAFTS)
+def draft_remission_guide(
+    carrier: Annotated[str, Field(description="The identification of a carrier in the book")],
+    plate: str,
+    departure: Annotated[str, Field(description="Where the goods leave from")],
+    starts_on: date,
+    ends_on: date,
+    recipients: list[RecipientRequest],
+) -> Previewed:
+    """A remission guide for goods on the road, to whom and why, with its printed preview."""
+    return _desk().draft_remission_guide(
+        carrier,
+        plate,
+        departure,
+        starts_on,
+        ends_on,
+        tuple(_recipient(held) for held in recipients),
+    )
+
+
+@tool(DRAFTS)
+def draft_withholding(
+    subject: Annotated[str, Field(description="The identification of the withheld in the book")],
+    fiscal_period: Annotated[date, Field(description="Any day of the month withheld")],
+    documents: list[SupportRequest],
+    related_party: bool = False,
+    subject_type: Annotated[
+        SubjectType | None,
+        Field(description="For a foreign identification: 01 = person; 02 = company"),
+    ] = None,
+) -> Previewed:
+    """A withholding voucher over the purchases it stands on, with its printed preview."""
+    return _desk().draft_withholding(
+        subject,
+        fiscal_period,
+        tuple(_support(held) for held in documents),
+        related_party,
+        subject_type,
+    )
 
 
 @tool(READS)

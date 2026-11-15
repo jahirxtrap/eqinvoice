@@ -2,10 +2,11 @@
   <img src="https://raw.githubusercontent.com/jahirxtrap/eqinvoice/main/.github/assets/banner.png" alt="EQinvoice" width="760">
 </p>
 
-Electronic invoices and credit notes for **Ecuador's SRI** (offline scheme 1.1.0): build the
-voucher, sign it XAdES-BES with the issuer's .p12, send it, read the authorization back and print
-the RIDE. Use it as a **library** inside your own system, or as an **MCP server** that lets an
-assistant draft, preview, issue and follow one issuer's vouchers.
+Every electronic voucher of **Ecuador's SRI** (offline scheme): invoices, credit and debit notes,
+purchase settlements, remission guides and withholdings. Build the voucher, sign it XAdES-BES with
+the issuer's .p12, send it alone or in a lote, read the authorization back and print the RIDE. Use
+it as a **library** inside your own system, or as an **MCP server** that lets an assistant draft,
+preview, issue and follow one issuer's vouchers.
 
 <p align="center">
   <a href="https://pypi.org/project/eqinvoice/">PyPI</a> ·
@@ -32,14 +33,16 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 
 ## Capabilities
 
-- **Vouchers**: invoices (factura) and credit notes (nota de crédito), checked against the SRI's own XSD before they leave.
+- **Vouchers**: invoices (factura 1.1.0), credit notes (nota de crédito 1.1.0), debit notes (nota de débito 1.0.0), purchase settlements (liquidación de compra 1.1.0), remission guides (guía de remisión 1.1.0) and withholdings (comprobante de retención 2.0.0), checked against the SRI's own XSD before they leave.
+- **Lote**: up to 50 signed vouchers sent at once under their own access key, with each one's authorization read back.
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
 - **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable, out of date or not for signing. A .p12 holding a key to encipher besides the one to sign, as the Banco Central del Ecuador issues them, signs with the key whose certificate is for digital signature.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
 - **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime and RIMPE category, accounting duty, establishments and their trade names), and the issuer its vouchers name, with the legend of its regime.
 - **SRI catalogs**: the payment forms as `PaymentForm`, the IVA rates by their codes, and voucher numbers written as the SRI prints them.
 - **Priced lines**: a line's subtotal and IVA worked out to the cent from its quantity, unit price, discount and the SRI's rate code.
-- **Period sales**: the vouchers of a month, or any period, added up per IVA rate as the IVA declaration asks for them, credit notes offsetting the invoices.
+- **Retentions**: a withholding's values worked out to the cent, IVA retentions checked against the SRI's table of codes.
+- **Period sales**: the vouchers of a month, or any period, added up per IVA rate as the IVA declaration asks for them, debit notes adding to the invoices and credit notes offsetting them.
 - **Printed copy (RIDE)**: an A4 page or an 80 mm strip, with the SRI's full block of totals and the access key as a barcode (page) or a QR code (strip).
 - **Logo**: a picture, or a mark and a name drawn as vectors, set beside each other as a lockup.
 - **Labels**: the printed words are data. Spanish by default, as the SRI prints them; any file of the same shape replaces them.
@@ -114,8 +117,49 @@ if answer is not None and answer.authorized:
 - **Still processing**: `authorize` gives `None` while the SRI has not answered yet; ask again later with the same access key.
 - **Sent twice**: `reception.already_there` is true when the SRI already holds that access key, so its answer waits at the authorization service.
 - **Numbering**: the establishment, the emission point and the sequential belong to the caller's system. A sequential is never reused, and a voucher sent again keeps its access key.
-- **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries.
-- **Declaring**: `period_sales(vouchers, since, until)` adds up the authorized vouchers issued between both days per IVA rate: `gross` is the invoiced base, `net` that base less the credit notes and `vat` its IVA, the three columns of the monthly IVA declaration. Pass only what the SRI authorized.
+- **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries, of any kind.
+- **Declaring**: `period_sales(vouchers, since, until)` adds up the authorized vouchers issued between both days per IVA rate: `gross` is the invoiced base, `net` that base less the credit notes and `vat` its IVA, the three columns of the monthly IVA declaration. Debit notes add up like invoices; settlements, guides and withholdings are no sales. Pass only what the SRI authorized.
+
+### Every kind
+
+`Voucher` is every priced kind; `RemissionGuide` and `Withholding` carry their own shape. The three
+share the numbering of `Numbered` (kind, environment, access key, establishment, point, sequential,
+establishment address, issue date), and `sign_voucher`, `read`, `read_voucher` and `render` take
+any of them (`AnyVoucher`).
+
+| Kind | Type | What it carries |
+|---|---|---|
+| `INVOICE` | `Voucher` | `buyer`, `lines`, `payments` |
+| `CREDIT_NOTE` | `Voucher` | `buyer`, `lines`, `modified` (the invoice it credits and why) |
+| `DEBIT_NOTE` | `Voucher` | `buyer`, `lines` as its charges (each description is a reason, each line keeps its IVA rate), `modified`, `payments` |
+| `PURCHASE_SETTLEMENT` | `Voucher` | `buyer` as the supplier (with `address`), `lines`, `payments` |
+| `REMISSION_GUIDE` | `RemissionGuide` | `carrier`, `plate`, `departure`, `starts_on`, `ends_on`, `recipients` (each with its `items` and the `Reference` it carries) |
+| `WITHHOLDING` | `Withholding` | `subject`, `fiscal_period`, `documents`: each `SupportDocument` with its `taxes`, `retentions` and `payments` |
+
+```python
+from eqinvoice import RetentionTax, tax_on, withhold
+
+tax_on(Decimal("100"), "4")                                      # IVA 15 % over 100: 15.00
+withhold(RetentionTax.INCOME, "303", Decimal("100"), Decimal("10"))  # income tax, its percentage
+withhold(RetentionTax.VAT, "1", Decimal("15"))                       # IVA: code 1 is 30 %
+```
+
+A final consumer can only buy: every other kind names its party. A foreign party is
+`BuyerKind.FOREIGN`; a withholding over one also says whether it is a person or a company
+(`SubjectType`).
+
+### Lote
+
+```python
+from eqinvoice import batch
+
+lote_key = access_key(issued_on, VoucherKind.INVOICE, issuer.ruc, Environment.TEST, "001", "900", 1)
+sri.send(batch(documents, issuer.ruc, lote_key))
+answers = sri.authorize_batch(lote_key)   # {access key of each voucher: Authorization}
+```
+
+A lote takes up to 50 signed vouchers and 500 KB, under an access key of its own: its series and
+sequential belong to lotes only. The SRI must have authorized the issuer to send lotes.
 
 <details>
 <summary><b>Amounts and codes</b></summary>
@@ -124,7 +168,8 @@ if answer is not None and answer.authorized:
 - **IVA rate codes** (`rate_code`): the SRI's table, for example `"4"` for 15 %, `"0"` for 0 %, `"6"` not subject to IVA, `"7"` exempt.
 - **Payment forms** (`Payment.form`): a `PaymentForm`, the SRI's table by its codes: `WITHOUT_FINANCIAL_SYSTEM` (`"01"`, cash), `DEBT_COMPENSATION` (`"15"`), `DEBIT_CARD` (`"16"`), `ELECTRONIC_MONEY` (`"17"`), `PREPAID_CARD` (`"18"`), `CREDIT_CARD` (`"19"`), `WITH_FINANCIAL_SYSTEM` (`"20"`, transfer) and `ENDORSED_SECURITIES` (`"21"`). Payments of the same form are added up, and a record with a code outside the table is refused.
 - **Numbers**: `voucher_number(establishment, point, sequential)` writes a voucher's number as the SRI prints it, `001-002-000000015`, the same `Voucher.number` gives.
-- **Credit notes**: `modified=Modified(number, issued_on, reason)` names the invoice they correct; credit notes carry no payments.
+- **Credit and debit notes**: `modified=Modified(number, issued_on, reason)` names the invoice they correct; credit notes carry no payments, and a debit note's reasons are its lines.
+- **IVA retention codes**: the SRI's table, `"9"` 10 %, `"10"` 20 %, `"1"` 30 %, `"11"` 50 %, `"2"` 70 %, `"3"` 100 %, `"7"` and `"8"` 0 %. Income tax and ISD codes come from the ATS catalog and bring their percentage.
 - **Final consumer**: `Buyer(BuyerKind.FINAL_CONSUMER)`. The voucher writes the SRI's own name and number for it.
 - **RIMPE**: an issuer in the RIMPE carries its legend, `CONTRIBUYENTE RÉGIMEN RIMPE` as an entrepreneur (`rimpe=True`) or `CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE` as a popular business (`popular_business=True`); `Taxpayer.issuer()` sets both from the registry. The SRI's published schema only admits the first legend, so the check before sending also admits the second, as its ficha técnica (2.34, annex 22) requires.
 
@@ -195,8 +240,8 @@ claude mcp add --scope user eqinvoice \
 ```
 
 - **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point. The legal name, the address, the accounting duty, the RIMPE regime and the establishment's trade name come from the SRI's registry. A withholding agent or a special taxpayer adds its resolution number, which the registry does not publish, and the RUC of the invoicing system's provider can go on every voucher.
-- **Clients**: `register_client` keeps a buyer and its email. A RUC is named as the registry holds it; a cédula or a passport brings its name.
-- **Drafts first**: every voucher starts as a draft with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI until the draft is issued.
+- **Parties**: `register_client` keeps a buyer, supplier, carrier or withheld party with its email and, for settlements, its address. A RUC is named as the registry holds it; a cédula, a passport or a foreign tax number brings its name.
+- **Drafts first**: every voucher starts as a draft with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI until the draft is issued. Credit and debit notes go against an authorized invoice of the book, and a guide's recipient can name one as what it carries. Drafts kept by 1.1 still read and issue.
 - **Issuing**: `issue_draft` numbers the draft, signs it, sends it and files it as the SRI leaves it: `authorized` (with its record and its printed copy), `refused` (with the SRI's messages) or `pending`, which `check_voucher` asks for again.
 - **Numbering**: each environment, kind, establishment and point numbers its own series, and a number is taken for good once a voucher is signed with it.
 
@@ -208,9 +253,13 @@ claude mcp add --scope user eqinvoice \
 | `look_up_taxpayer` | A RUC as the SRI's registry holds it |
 | `configure_issuer` | Who issues, from which establishment and point, in which environment |
 | `show_issuer` | The issuer as it is configured |
-| `register_client`, `list_clients`, `forget_client` | The clients in the book |
+| `register_client`, `list_clients`, `forget_client` | The parties in the book |
 | `draft_invoice` | An invoice for a client, with its printed preview |
 | `draft_credit_note` | A credit note against an authorized invoice, whole or by lines |
+| `draft_debit_note` | A debit note charging more on an authorized invoice |
+| `draft_purchase_settlement` | A purchase settlement for a supplier who issues no vouchers |
+| `draft_remission_guide` | A remission guide for goods on the road, to its recipients |
+| `draft_withholding` | A withholding over the purchases it stands on, by income tax, IVA or ISD |
 | `list_drafts`, `discard_draft` | The drafts waiting to be issued |
 | `issue_draft` | The approved draft numbered, signed and sent to the SRI |
 | `list_vouchers` | Every voucher numbered in the current environment |
@@ -225,7 +274,7 @@ claude mcp add --scope user eqinvoice \
 | Path | What it holds |
 |---|---|
 | `profile.json` | The issuer, its establishment and point, and the environment |
-| `clients/<identification>.json` | One client each |
+| `clients/<identification>.json` | One party each |
 | `drafts/<id>.json`, `drafts/<id>.pdf` | A draft and its printed preview |
 | `vouchers/<environment>/<kind>/<number>/` | `signed.xml`, then `authorized.xml` and `printed.pdf`, or `refused.json` |
 | `brand/` | The logo of the printed copies: `mark.svg`, `name.svg` and a `.ttf`, or `logo.png`. An optional `lockup.json` (`{"name_size": 0.76}`) sizes the name or the gap for this brand |

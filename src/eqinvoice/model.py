@@ -11,6 +11,10 @@ ZERO = Decimal("0")
 class VoucherKind(StrEnum):
     INVOICE = "invoice"
     CREDIT_NOTE = "credit_note"
+    DEBIT_NOTE = "debit_note"
+    PURCHASE_SETTLEMENT = "purchase_settlement"
+    REMISSION_GUIDE = "remission_guide"
+    WITHHOLDING = "withholding"
 
 
 class Environment(StrEnum):
@@ -23,6 +27,18 @@ class BuyerKind(StrEnum):
     CEDULA = "cedula"
     PASSPORT = "passport"
     FINAL_CONSUMER = "final_consumer"
+    FOREIGN = "foreign"
+
+
+class RetentionTax(StrEnum):
+    INCOME = "1"
+    VAT = "2"
+    ISD = "6"
+
+
+class SubjectType(StrEnum):
+    PERSON = "01"
+    COMPANY = "02"
 
 
 class PaymentForm(StrEnum):
@@ -60,12 +76,13 @@ class Issuer:
 
 @dataclass(frozen=True)
 class Buyer:
-    """Whom the voucher is for; a final consumer carries neither identification nor name."""
+    """The other party: the buyer, a settlement's supplier, a guide's carrier or the withheld."""
 
     kind: BuyerKind
     identification: str | None = None
     name: str | None = None
     email: str | None = None
+    address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,8 +123,16 @@ class TaxGroup:
     rate: Decimal
 
 
+def added_up(payments: tuple[Payment, ...]) -> tuple[Payment, ...]:
+    """The payments added up per form, in the order the forms first appear."""
+    forms: dict[PaymentForm, Decimal] = {}
+    for payment in payments:
+        forms[payment.form] = forms.get(payment.form, ZERO) + payment.amount
+    return tuple(Payment(form, amount) for form, amount in forms.items())
+
+
 @dataclass(frozen=True)
-class Voucher:
+class Numbered:
     kind: VoucherKind
     environment: Environment
     access_key: str
@@ -116,15 +141,21 @@ class Voucher:
     sequential: int
     establishment_address: str
     issued_on: date
+
+    @property
+    def number(self) -> str:
+        return voucher_number(self.establishment, self.point, self.sequential)
+
+
+@dataclass(frozen=True)
+class Voucher(Numbered):
+    """The priced kinds; a debit note's lines are its charges."""
+
     buyer: Buyer
     lines: tuple[Line, ...]
     payments: tuple[Payment, ...] = ()
     modified: Modified | None = None
     extra: tuple[tuple[str, str], ...] = ()
-
-    @property
-    def number(self) -> str:
-        return voucher_number(self.establishment, self.point, self.sequential)
 
     @property
     def subtotal(self) -> Decimal:
@@ -156,16 +187,133 @@ class Voucher:
 
     @property
     def payment_forms(self) -> tuple[Payment, ...]:
-        """The payments added up per form, in the order the forms first appear."""
-        forms: dict[PaymentForm, Decimal] = {}
-        for payment in self.payments:
-            forms[payment.form] = forms.get(payment.form, ZERO) + payment.amount
-        return tuple(Payment(form, amount) for form, amount in forms.items())
+        return added_up(self.payments)
+
+    @property
+    def party(self) -> Buyer:
+        return self.buyer
+
+
+@dataclass(frozen=True)
+class GuideItem:
+    description: str
+    quantity: Decimal
+    code: str | None = None
+    extra_code: str | None = None
+    details: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class Reference:
+    """A document named by its SRI type code, such as 01 for an invoice, and its number."""
+
+    document_code: str
+    number: str
+    issued_on: date
+    authorization: str | None = None
+
+
+@dataclass(frozen=True)
+class Recipient:
+    identification: str
+    name: str
+    address: str
+    reason: str
+    items: tuple[GuideItem, ...]
+    route: str | None = None
+    destination: str | None = None
+    customs_document: str | None = None
+    supporting: Reference | None = None
+
+
+@dataclass(frozen=True)
+class RemissionGuide(Numbered):
+    carrier: Buyer
+    plate: str
+    departure: str
+    starts_on: date
+    ends_on: date
+    recipients: tuple[Recipient, ...]
+    extra: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def party(self) -> Buyer:
+        return self.carrier
+
+
+@dataclass(frozen=True)
+class Retention:
+    tax: RetentionTax
+    code: str
+    base: Decimal
+    percentage: Decimal
+    withheld: Decimal
+
+
+@dataclass(frozen=True)
+class Abroad:
+    """A payment abroad, by the ATS catalog's regime and country codes."""
+
+    regime: str
+    country: str
+    double_taxation: bool
+    withheld_by_law: bool
+    preferential: bool
+
+
+@dataclass(frozen=True)
+class SupportDocument:
+    """The purchase a withholding stands on; support_code is the ATS catalog's."""
+
+    support_code: str
+    document: Reference
+    taxes: tuple[TaxGroup, ...]
+    retentions: tuple[Retention, ...]
+    payments: tuple[Payment, ...]
+    registered_on: date | None = None
+    abroad: Abroad | None = None
+
+    @property
+    def subtotal(self) -> Decimal:
+        return sum((tax.base for tax in self.taxes), ZERO)
+
+    @property
+    def total(self) -> Decimal:
+        return self.subtotal + sum((tax.vat for tax in self.taxes), ZERO)
+
+    @property
+    def withheld(self) -> Decimal:
+        return sum((retention.withheld for retention in self.retentions), ZERO)
+
+    @property
+    def payment_forms(self) -> tuple[Payment, ...]:
+        return added_up(self.payments)
+
+
+@dataclass(frozen=True)
+class Withholding(Numbered):
+    subject: Buyer
+    fiscal_period: date
+    documents: tuple[SupportDocument, ...]
+    related_party: bool = False
+    subject_type: SubjectType | None = None
+    extra: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def withheld(self) -> Decimal:
+        return sum((document.withheld for document in self.documents), ZERO)
+
+    @property
+    def party(self) -> Buyer:
+        return self.subject
+
+
+AnyVoucher = Voucher | RemissionGuide | Withholding
 
 
 @dataclass(frozen=True)
 class Issued:
-    voucher: Voucher
+    voucher: AnyVoucher
     issuer: Issuer
     authorized_at: datetime
     authorization_number: str

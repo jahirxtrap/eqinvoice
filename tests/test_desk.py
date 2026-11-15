@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -13,18 +14,28 @@ from eqinvoice import (
     CredentialRefused,
     Environment,
     Establishment,
+    GuideItem,
     Message,
     Payment,
     Reception,
+    Recipient,
+    Reference,
+    RemissionGuide,
+    RetentionTax,
     SimulatedRegistry,
     SimulatedSri,
     Sri,
     SriUnavailable,
+    SupportDocument,
     Taxpayer,
+    Voucher,
     VoucherInvalid,
     VoucherKind,
+    Withholding,
     price_line,
     simulated_credential,
+    tax_on,
+    withhold,
 )
 from eqinvoice_mcp.book import Book, NotInBook
 from eqinvoice_mcp.desk import Desk, Refused
@@ -129,6 +140,7 @@ def test_a_ruc_client_is_named_by_the_registry_and_any_other_by_hand(tmp_path):
 def test_a_draft_comes_with_the_voucher_it_would_be_and_a_printed_preview(tmp_path):
     previewed = a_configured_desk(tmp_path).draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER)
     voucher = previewed.voucher
+    assert isinstance(voucher, Voucher)
     assert voucher.number == "001-100-000000001" and voucher.total == Decimal("575.00")
     assert voucher.payments == (Payment(TRANSFER, Decimal("575.00")),)
     assert voucher.buyer.email == "pagos@cliente.ec"
@@ -191,14 +203,16 @@ def test_a_credit_note_offsets_an_authorized_invoice_and_never_exceeds_it(tmp_pa
     invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     number = invoice.voucher.number
     whole = desk.draft_credit_note(number, "Devolucion")
-    assert whole.voucher.kind == VoucherKind.CREDIT_NOTE and whole.voucher.payments == ()
-    assert whole.voucher.modified is not None and whole.voucher.modified.number == number
-    assert whole.voucher.total == invoice.voucher.total
+    note, sold = whole.voucher, invoice.voucher
+    assert isinstance(note, Voucher) and isinstance(sold, Voucher)
+    assert note.kind == VoucherKind.CREDIT_NOTE and note.payments == ()
+    assert note.modified is not None and note.modified.number == number
+    assert note.total == sold.total
     with pytest.raises(Refused):
         desk.draft_credit_note(number, "Devolucion", (replace(SERVICE, subtotal=Decimal("600")),))
-    note = desk.issue(whole.draft.identifier)
-    assert note.standing == Standing.AUTHORIZED and note.voucher.number == "001-100-000000001"
-    assert desk.check(note.voucher.number, VoucherKind.CREDIT_NOTE) == note
+    issued = desk.issue(whole.draft.identifier)
+    assert issued.standing == Standing.AUTHORIZED and issued.voucher.number == "001-100-000000001"
+    assert desk.check(issued.voucher.number, VoucherKind.CREDIT_NOTE) == issued
     with pytest.raises(NotInBook):
         desk.draft_credit_note("001-100-000000009", "Devolucion")
 
@@ -226,3 +240,87 @@ def test_a_credit_note_needs_an_invoice_the_sri_authorized(tmp_path):
     refused = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     with pytest.raises(Refused):
         desk.draft_credit_note(refused.voucher.number, "Devolucion")
+
+
+def test_a_debit_note_charges_an_authorized_invoice_and_adds_to_its_sales(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
+    late = price_line("", "Intereses por mora", Decimal("1"), Decimal("20"), "4")
+    note = desk.issue(
+        desk.draft_debit_note(invoice.voucher.number, (late,), TRANSFER).draft.identifier
+    )
+    assert note.standing == Standing.AUTHORIZED and note.voucher.number == "001-100-000000001"
+    assert isinstance(note.voucher, Voucher) and note.voucher.total == Decimal("23.00")
+    day = invoice.voucher.issued_on
+    (taxed,) = desk.sales(day, day).sales.rates
+    assert (taxed.gross, taxed.vat) == (Decimal("520"), Decimal("78"))
+
+
+def test_a_purchase_settlement_pays_a_supplier_without_ruc(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    desk.register_client("1104680135", name="Ana Perez", address="BARRIO SAN ISIDRO, LOJA")
+    filed = desk.issue(
+        desk.draft_purchase_settlement("1104680135", (SERVICE,), TRANSFER).draft.identifier
+    )
+    assert filed.standing == Standing.AUTHORIZED
+    assert isinstance(filed.voucher, Voucher)
+    assert filed.voucher.buyer.address == "BARRIO SAN ISIDRO, LOJA"
+    assert desk.sales(filed.voucher.issued_on, filed.voucher.issued_on).sales.rates == ()
+
+
+def test_a_remission_guide_carries_what_an_invoice_sold(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
+    desk.register_client("1104680135", name="Transportes Perez")
+    recipient = Recipient(
+        CLIENT_RUC,
+        "CLIENTE S.A.S.",
+        "AV. AMAZONAS N10-20, QUITO",
+        "Venta",
+        (GuideItem("Servidor", Decimal("1"), "SRV-1"),),
+        supporting=desk.reference(invoice.voucher.number),
+    )
+    day = invoice.voucher.issued_on
+    with pytest.raises(Refused):
+        desk.draft_remission_guide(
+            "1104680135", "LBA-1234", "LOJA", day, day - timedelta(days=1), (recipient,)
+        )
+    draft = desk.draft_remission_guide("1104680135", "LBA-1234", "LOJA", day, day, (recipient,))
+    filed = desk.issue(draft.draft.identifier)
+    assert filed.standing == Standing.AUTHORIZED and isinstance(filed.voucher, RemissionGuide)
+    supporting = filed.voucher.recipients[0].supporting
+    assert supporting is not None and supporting.authorization == invoice.voucher.access_key
+
+
+def test_a_withholding_keeps_what_was_withheld_from_a_purchase(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    purchase = SupportDocument(
+        "01",
+        Reference("01", "002-001-000000045", NOW.date(), None),
+        (tax_on(Decimal("100"), "4"),),
+        (withhold(RetentionTax.INCOME, "303", Decimal("100"), Decimal("10")),),
+        (Payment(TRANSFER, Decimal("115.00")),),
+    )
+    with pytest.raises(Refused):
+        desk.draft_withholding(CLIENT_RUC, NOW.date(), (replace(purchase, retentions=()),))
+    filed = desk.issue(desk.draft_withholding(CLIENT_RUC, NOW.date(), (purchase,)).draft.identifier)
+    assert filed.standing == Standing.AUTHORIZED and isinstance(filed.voucher, Withholding)
+    assert filed.voucher.withheld == Decimal("10.00")
+
+
+def test_a_draft_kept_by_version_1_1_still_issues(tmp_path):
+    desk = a_configured_desk(tmp_path)
+    kept = {
+        "identifier": "0a1b2c3d",
+        "kind": "invoice",
+        "buyer": {"kind": "ruc", "identification": CLIENT_RUC, "name": "CLIENTE S.A.S."},
+        "lines": [asdict(SERVICE)],
+        "payment_form": "20",
+        "modified": None,
+        "created_at": NOW.isoformat(),
+    }
+    (tmp_path / "drafts").mkdir(exist_ok=True)
+    (tmp_path / "drafts" / "0a1b2c3d.json").write_text(json.dumps(kept, default=str))
+    filed = desk.issue("0a1b2c3d")
+    assert filed.standing == Standing.AUTHORIZED and isinstance(filed.voucher, Voucher)
+    assert filed.voucher.payments == (Payment(TRANSFER, Decimal("575.00")),)

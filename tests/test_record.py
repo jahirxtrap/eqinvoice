@@ -4,8 +4,17 @@ from decimal import Decimal
 
 import pytest
 
-from eqinvoice import Payment, VoucherInvalid, VoucherKind, read, read_voucher
-from tests.builders import CASH, RUC, TRANSFER, a_voucher, an_issuer, authorized, signed
+from eqinvoice import Payment, Voucher, VoucherInvalid, VoucherKind, read, read_voucher
+from tests.builders import (
+    CASH,
+    RUC,
+    TRANSFER,
+    a_document,
+    a_voucher,
+    an_issuer,
+    authorized,
+    signed,
+)
 
 
 def test_a_payment_form_the_sri_does_not_list_is_refused():
@@ -23,12 +32,18 @@ def test_the_record_reads_back_whether_its_issuer_is_a_popular_business():
     assert entrepreneur.rimpe and not entrepreneur.popular_business
 
 
+@pytest.mark.parametrize("kind", list(VoucherKind))
+def test_every_kind_reads_back_as_the_voucher_it_was_built_from(kind):
+    voucher = a_document(kind)
+    assert read_voucher(signed(voucher)) == voucher
+    assert read(authorized(voucher)).voucher == voucher
+
+
 def test_the_record_reads_back_as_the_voucher_it_holds():
     voucher = a_voucher()
     issued = read(authorized(voucher))
+    assert isinstance(issued.voucher, Voucher)
     assert issued.voucher.number == "001-001-000000007"
-    assert issued.voucher.buyer == voucher.buyer
-    assert issued.voucher.lines == voucher.lines
     assert issued.voucher.payments == (
         Payment(CASH, Decimal("10.00")),
         Payment(TRANSFER, Decimal("3.30")),
@@ -46,7 +61,8 @@ def test_an_invoice_reads_its_tip_and_other_taxes_a_credit_note_no_tip():
 
 def test_a_credit_note_reads_the_invoice_it_modifies():
     voucher = a_voucher(VoucherKind.CREDIT_NOTE)
-    assert read(authorized(voucher)).voucher.modified == voucher.modified
+    held = read(authorized(voucher)).voucher
+    assert isinstance(held, Voucher) and held.modified == voucher.modified
 
 
 def test_a_signed_document_reads_back_as_the_voucher_it_carries():

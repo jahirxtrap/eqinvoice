@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from io import BytesIO
@@ -16,11 +17,24 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Flowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from eqinvoice.document import issuer_legend, money
-from eqinvoice.model import Issued, Modified, VoucherKind
+from eqinvoice.model import (
+    Buyer,
+    GuideItem,
+    Issued,
+    Modified,
+    Payment,
+    Recipient,
+    RemissionGuide,
+    Voucher,
+    VoucherKind,
+    Withholding,
+)
 from eqinvoice.protocol import (
     CLOCK,
     DATE_FORMAT,
+    DOCUMENT_CODES,
     EMAIL_FIELD,
+    FISCAL_PERIOD_FORMAT,
     SYSTEM_PROVIDER_FIELD,
     buyer_shown,
 )
@@ -51,6 +65,12 @@ BARCODE_HEIGHT = 12 * mm
 BARCODE_BAR = 0.62
 DETAIL_SHARES = (0.14, 0.1, 0.38, 0.14, 0.11, 0.13)
 NUMBER_COLUMNS = 3
+CHARGE_SHARES = (0.76, 0.24)
+ITEM_SHARES = (0.12, 0.52, 0.18, 0.18)
+RETENTION_SHARES = (0.13, 0.16, 0.11, 0.1, 0.1, 0.14, 0.12, 0.14)
+SEPARATOR = " • "
+RETENTION_COLUMNS = ("document", "number", "issuedOn", "fiscalYear", "tax", "base", "percentage")
+RETENTION_AMOUNTS = RETENTION_COLUMNS.index("base")
 EXTRA_SHARES = (0.3, 0.7)
 PAYMENT_SHARES = (0.76, 0.24)
 TOTAL_SHARES = (0.64, 0.36)
@@ -125,6 +145,10 @@ def _unit_price(amount: Decimal) -> str:
     return f"{amount:.{max(places, UNIT_PRICE_PLACES)}f}"
 
 
+def _day(on: date) -> str:
+    return on.strftime(DATE_FORMAT)
+
+
 def _widths(width: float, shares: tuple[float, ...]) -> list[float]:
     return [width * share for share in shares]
 
@@ -165,6 +189,25 @@ def _box(
 
 def _divided(last: int) -> list[tuple[Any, ...]]:
     return [("LINEBELOW", (0, 0), (-1, last - 1), BORDER, RULE)] if last > 0 else []
+
+
+def _pairs(groups: list[list[Paragraph]], width: float) -> Table:
+    rows: list[list[Any]] = [
+        [*group[at : at + 2], *[""] * (2 - len(group[at : at + 2]))]
+        for group in groups
+        for at in range(0, len(group), 2)
+    ]
+    return _box(rows, [width * BUYER_SHARE, width * (1 - BUYER_SHARE)])
+
+
+def _grid(header: list[str], rows: list[list[Any]], widths: list[float], amounts: int) -> Table:
+    titles = [
+        _text(name, bold=True, align=TA_RIGHT if index >= amounts else TA_LEFT)
+        for index, name in enumerate(header)
+    ]
+    body = [titles, *rows]
+    lines = [*_divided(len(body) - 1), ("LINEBELOW", (0, 0), (-1, 0), BORDER, INK)]
+    return _box(body, widths, lines)
 
 
 def _keeps_accounts(issued: Issued, words: Labels) -> str:
@@ -230,47 +273,89 @@ def _head(issued: Issued, words: Labels, width: float, logo: Logo | None) -> Tab
     return head
 
 
-def _modified_name(modified: Modified, words: Labels) -> str:
-    return f"{words['documents'][VoucherKind.INVOICE]} {modified.number}"
+def _document_name(code: str, number: str, words: Labels) -> str:
+    return f"{words['documentCodes'].get(code, code)} {number}"
 
 
-def _buyer_fields(issued: Issued, words: Labels) -> list[Paragraph]:
-    voucher = issued.voucher
-    buyer = voucher.buyer
-    name, identification = buyer_shown(buyer.kind, buyer.name, buyer.identification)
-    return [
-        _field(words["buyerName"], name),
-        _field(words["buyerId"], identification),
-        _field(words["issuedOn"], voucher.issued_on.strftime(DATE_FORMAT)),
-    ]
+def _party_fields(party: Buyer, words: Labels, name_label: str, id_label: str) -> list[Paragraph]:
+    name, identification = buyer_shown(party.kind, party.name, party.identification)
+    return [_field(words[name_label], name), _field(words[id_label], identification)]
+
+
+def _buyer_fields(voucher: Voucher, words: Labels) -> list[Paragraph]:
+    fields = _party_fields(voucher.buyer, words, "buyerName", "buyerId")
+    fields.append(_field(words["issuedOn"], _day(voucher.issued_on)))
+    if voucher.buyer.address:
+        fields.append(_field(words["address"], voucher.buyer.address))
+    return fields
 
 
 def _modified_fields(modified: Modified, words: Labels) -> list[Paragraph]:
+    fields = [
+        _field(
+            words["modified"],
+            _document_name(DOCUMENT_CODES[VoucherKind.INVOICE], modified.number, words),
+        ),
+        _field(words["modifiedIssuedOn"], _day(modified.issued_on)),
+    ]
+    if modified.reason:
+        fields.append(_field(words["reason"], modified.reason))
+    return fields
+
+
+def _carrier_fields(guide: RemissionGuide, words: Labels) -> list[Paragraph]:
     return [
-        _field(words["modified"], _modified_name(modified, words)),
-        _field(words["modifiedIssuedOn"], modified.issued_on.strftime(DATE_FORMAT)),
-        _field(words["reason"], modified.reason),
+        *_party_fields(guide.carrier, words, "carrierName", "carrierId"),
+        _field(words["plate"], guide.plate),
+        _field(words["departure"], guide.departure),
+        _field(words["startsOn"], _day(guide.starts_on)),
+        _field(words["endsOn"], _day(guide.ends_on)),
     ]
 
 
-def _buyer_box(issued: Issued, words: Labels, width: float) -> Table:
-    name, identification, issued_on = _buyer_fields(issued, words)
-    rows: list[list[Any]] = [[name, identification], [issued_on, ""]]
-    modified = issued.voucher.modified
-    if modified is not None:
-        which, when, why = _modified_fields(modified, words)
-        rows += [[which, when], [why, ""]]
-    return _box(rows, [width * BUYER_SHARE, width * (1 - BUYER_SHARE)])
+def _recipient_fields(recipient: Recipient, words: Labels) -> list[Paragraph]:
+    fields = []
+    supporting = recipient.supporting
+    if supporting is not None:
+        fields += [
+            _field(
+                words["supporting"],
+                _document_name(supporting.document_code, supporting.number, words),
+            ),
+            _field(words["supportingIssuedOn"], _day(supporting.issued_on)),
+        ]
+        if supporting.authorization:
+            fields.append(_field(words["supportingAuthorization"], supporting.authorization))
+    fields += [
+        _field(words["transferReason"], recipient.reason),
+        _field(words["destination"], recipient.address),
+        _field(words["recipientId"], recipient.identification),
+        _field(words["recipientName"], recipient.name),
+    ]
+    optional = (
+        ("customsDocument", recipient.customs_document),
+        ("destinationEstablishment", recipient.destination),
+        ("route", recipient.route),
+    )
+    return fields + [_field(words[label], value) for label, value in optional if value]
 
 
-def _details(issued: Issued, words: Labels, width: float) -> Table:
+def _subject_fields(held: Withholding, words: Labels) -> list[Paragraph]:
+    return [
+        *_party_fields(held.subject, words, "buyerName", "buyerId"),
+        _field(words["issuedOn"], _day(held.issued_on)),
+        _field(words["fiscalPeriod"], held.fiscal_period.strftime(FISCAL_PERIOD_FORMAT)),
+    ]
+
+
+def _details(voucher: Voucher, words: Labels, width: float) -> Table:
+    if voucher.kind == VoucherKind.DEBIT_NOTE:
+        charges = words["charges"]
+        rows = [[_text(line.description), _amount(money(line.subtotal))] for line in voucher.lines]
+        return _grid([charges["reason"], charges["value"]], rows, _widths(width, CHARGE_SHARES), 1)
     columns = words["columns"]
     names = ("code", "quantity", "description", "unitPrice", "discount", "total")
-    header = [
-        _text(columns[name], bold=True, align=TA_RIGHT if index >= NUMBER_COLUMNS else TA_LEFT)
-        for index, name in enumerate(names)
-    ]
-    rows = [header] + [
+    rows = [
         [
             _text(line.code),
             _text(_quantity(line.quantity)),
@@ -279,14 +364,66 @@ def _details(issued: Issued, words: Labels, width: float) -> Table:
             _amount(money(line.discount)),
             _amount(money(line.subtotal)),
         ]
-        for line in issued.voucher.lines
+        for line in voucher.lines
     ]
-    lines = [*_divided(len(rows) - 1), ("LINEBELOW", (0, 0), (-1, 0), BORDER, INK)]
-    return _box(rows, _widths(width, DETAIL_SHARES), lines)
+    return _grid(
+        [columns[name] for name in names], rows, _widths(width, DETAIL_SHARES), NUMBER_COLUMNS
+    )
 
 
-def _total_rows(issued: Issued, words: Labels) -> list[list[Any]]:
-    voucher = issued.voucher
+def _described(item: GuideItem) -> str:
+    return SEPARATOR.join([item.description, *(f"{name}: {value}" for name, value in item.details)])
+
+
+def _items(recipient: Recipient, words: Labels, width: float) -> Table:
+    columns = words["items"]
+    rows = [
+        [
+            _text(_quantity(item.quantity)),
+            _text(_described(item)),
+            _text(item.code or ""),
+            _text(item.extra_code or ""),
+        ]
+        for item in recipient.items
+    ]
+    header = [columns[name] for name in ("quantity", "description", "code", "extraCode")]
+    return _grid(header, rows, _widths(width, ITEM_SHARES), len(header))
+
+
+def _retention_entries(held: Withholding, words: Labels) -> list[tuple[str, ...]]:
+    period = held.fiscal_period.strftime(FISCAL_PERIOD_FORMAT)
+    return [
+        (
+            words["documentCodes"].get(
+                support.document.document_code, support.document.document_code
+            ),
+            support.document.number,
+            _day(support.document.issued_on),
+            period,
+            words["retentionTaxes"].get(retention.tax, retention.tax),
+            money(retention.base),
+            _quantity(retention.percentage),
+            money(retention.withheld),
+        )
+        for support in held.documents
+        for retention in support.retentions
+    ]
+
+
+def _retentions(held: Withholding, words: Labels, width: float) -> Table:
+    columns = words["retentions"]
+    rows = [
+        [
+            _amount(value) if index >= RETENTION_AMOUNTS else _text(value)
+            for index, value in enumerate(entry)
+        ]
+        for entry in _retention_entries(held, words)
+    ]
+    header = [columns[name] for name in (*RETENTION_COLUMNS, "withheld")]
+    return _grid(header, rows, _widths(width, RETENTION_SHARES), RETENTION_AMOUNTS)
+
+
+def _priced_totals(issued: Issued, voucher: Voucher, words: Labels) -> list[list[Any]]:
     groups = voucher.tax_groups
     rated = [group for group in groups if group.rate > 0]
     unrated = {group.code: group.base for group in groups if group.rate == 0}
@@ -312,13 +449,21 @@ def _total_rows(issued: Issued, words: Labels) -> list[list[Any]]:
     rows.append([_text(words["irbpnr"]), _amount(money(issued.irbpnr))])
     if issued.tip is not None:
         rows.append([_text(words["tip"]), _amount(money(issued.tip))])
-    rows.append(
-        [
-            _text(words["total"], LEAD_SIZE, bold=True),
-            _amount(money(issued.total), bold=True, size=LEAD_SIZE),
-        ]
-    )
+    rows.append(_total_row(words["total"], issued.total))
     return rows
+
+
+def _total_row(label: str, total: Decimal) -> list[Any]:
+    return [_text(label, LEAD_SIZE, bold=True), _amount(money(total), bold=True, size=LEAD_SIZE)]
+
+
+def _total_rows(issued: Issued, words: Labels) -> list[list[Any]]:
+    voucher = issued.voucher
+    if isinstance(voucher, Voucher):
+        return _priced_totals(issued, voucher, words)
+    if isinstance(voucher, Withholding):
+        return [_total_row(words["withheldTotal"], voucher.withheld)]
+    return []
 
 
 def _totals(
@@ -327,27 +472,29 @@ def _totals(
     width: float,
     shares: tuple[float, ...] = TOTAL_SHARES,
     at_least: float = 0.0,
-) -> Table:
+) -> Table | None:
     rows = _total_rows(issued, words)
+    if not rows:
+        return None
     last = len(rows) - 1
     lines = [*_divided(last - 1), ("LINEBELOW", (0, last - 1), (-1, last - 1), BORDER, INK)]
-    return _box(rows, _widths(width, shares), lines, at_least)
+    return _box(rows, _widths(width, shares), lines if last else [], at_least)
 
 
 def _extra_box(issued: Issued, words: Labels, width: float, at_least: float = 0.0) -> Table:
-    fields = list(issued.voucher.extra)
+    voucher = issued.voucher
+    fields = list(voucher.extra)
     if issued.issuer.system_provider_ruc:
         fields.insert(0, (SYSTEM_PROVIDER_FIELD, issued.issuer.system_provider_ruc))
-    if issued.voucher.buyer.email:
-        fields.insert(0, (EMAIL_FIELD, issued.voucher.buyer.email))
+    if voucher.party.email:
+        fields.insert(0, (EMAIL_FIELD, voucher.party.email))
     rows: list[list[Any]] = [[_text(words["extra"], bold=True), ""]]
     rows += [[_text(name), _text(value)] for name, value in fields]
     lines = [("SPAN", (0, 0), (-1, 0)), *_divided(len(rows) - 1)]
     return _box(rows, _widths(width, EXTRA_SHARES), lines, at_least)
 
 
-def _payment_box(issued: Issued, words: Labels, width: float) -> Table | None:
-    payments = issued.voucher.payment_forms
+def _payment_box(payments: tuple[Payment, ...], words: Labels, width: float) -> Table | None:
     if not payments:
         return None
     rows: list[list[Any]] = [
@@ -363,11 +510,18 @@ def _payment_box(issued: Issued, words: Labels, width: float) -> Table | None:
     return _box(rows, _widths(width, PAYMENT_SHARES), _divided(len(rows) - 1))
 
 
+def _payments(issued: Issued) -> tuple[Payment, ...]:
+    voucher = issued.voucher
+    return voucher.payment_forms if isinstance(voucher, Voucher) else ()
+
+
 def _foot(issued: Issued, words: Labels, width: float) -> Table:
     side = (width - GAP) * FOOT_SHARE
     rest = width - GAP - side
     totals = _totals(issued, words, rest)
-    payment = _payment_box(issued, words, side)
+    if totals is None:
+        return _extra_box(issued, words, width)
+    payment = _payment_box(_payments(issued), words, side)
     below = _tall(payment, side) + GAP if payment is not None else 0.0
     extra = _extra_box(issued, words, side, _tall(totals, rest) - below)
     totals = _totals(issued, words, rest, at_least=_tall(extra, side) + below)
@@ -375,6 +529,36 @@ def _foot(issued: Issued, words: Labels, width: float) -> Table:
     foot = Table([[left, "", totals]], colWidths=[side, GAP, rest])
     foot.setStyle(BARE)
     return foot
+
+
+def _body(issued: Issued, words: Labels, width: float) -> list[Flowable]:
+    voucher = issued.voucher
+    if isinstance(voucher, RemissionGuide):
+        flow: list[Flowable] = [_pairs([_carrier_fields(voucher, words)], width)]
+        for recipient in voucher.recipients:
+            flow += [
+                Spacer(1, GAP),
+                _pairs([_recipient_fields(recipient, words)], width),
+                Spacer(1, GAP),
+                _items(recipient, words, width),
+            ]
+        return flow
+    if isinstance(voucher, Withholding):
+        return [
+            _pairs([_subject_fields(voucher, words)], width),
+            Spacer(1, GAP),
+            _retentions(voucher, words, width),
+        ]
+    modified = [_modified_fields(voucher.modified, words)] if voucher.modified else []
+    return [
+        _pairs([_buyer_fields(voucher, words), *modified], width),
+        Spacer(1, GAP),
+        _details(voucher, words, width),
+    ]
+
+
+def _title(issued: Issued, words: Labels) -> str:
+    return f"{words['documents'][issued.voucher.kind]} {issued.voucher.number}"
 
 
 def _page(issued: Issued, words: Labels, logo: Logo | None) -> bytes:
@@ -386,16 +570,14 @@ def _page(issued: Issued, words: Labels, logo: Logo | None) -> bytes:
         rightMargin=MARGIN,
         topMargin=MARGIN,
         bottomMargin=MARGIN,
-        title=f"{words['documents'][issued.voucher.kind]} {issued.voucher.number}",
+        title=_title(issued, words),
     )
     width = page.width
     page.build(
         [
             _head(issued, words, width, logo),
             Spacer(1, GAP),
-            _buyer_box(issued, words, width),
-            Spacer(1, GAP),
-            _details(issued, words, width),
+            *_body(issued, words, width),
             Spacer(1, GAP),
             _foot(issued, words, width),
         ]
@@ -474,20 +656,16 @@ def _ticket_voucher(issued: Issued, words: Labels) -> list[Flowable]:
     ]
 
 
-def _ticket_lines(issued: Issued, words: Labels, width: float) -> Table:
-    columns = words["columns"]
+def _ticket_list(
+    header: tuple[str, str], entries: list[tuple[str, str, str]], width: float
+) -> Table:
     rows: list[list[Any]] = [
-        [
-            _text(columns["description"], bold=True),
-            _text(columns["total"], bold=True, align=TA_RIGHT),
-        ]
+        [_text(header[0], bold=True), _text(header[1], bold=True, align=TA_RIGHT)]
     ]
-    for line in issued.voucher.lines:
-        priced = f"{_quantity(line.quantity)} x {_unit_price(line.unit_price)}"
-        if line.discount > 0:
-            priced = f"{priced} - {columns['discount']} {money(line.discount)}"
-        rows.append([_text(line.description), _amount(money(line.subtotal))])
-        rows.append([_text(f"{line.code} • {priced}", muted=True), ""])
+    for main, amount, below in entries:
+        rows.append([_text(main), _amount(amount)])
+        if below:
+            rows.append([_text(below, muted=True), ""])
     table = Table(rows, colWidths=_widths(width, TICKET_LINE_SHARES))
     table.setStyle(
         TableStyle(
@@ -502,22 +680,77 @@ def _ticket_lines(issued: Issued, words: Labels, width: float) -> Table:
     return table
 
 
+def _priced_entries(voucher: Voucher, words: Labels) -> list[tuple[str, str, str]]:
+    columns = words["columns"]
+    entries = []
+    for line in voucher.lines:
+        priced = f"{_quantity(line.quantity)} x {_unit_price(line.unit_price)}"
+        if line.discount > 0:
+            priced = f"{priced} - {columns['discount']} {money(line.discount)}"
+        below = (
+            "" if voucher.kind == VoucherKind.DEBIT_NOTE else SEPARATOR.join([line.code, priced])
+        )
+        entries.append((line.description, money(line.subtotal), below))
+    return entries
+
+
+def _ticket_body(issued: Issued, words: Labels, width: float) -> list[Flowable]:
+    voucher = issued.voucher
+    columns = words["columns"]
+    if isinstance(voucher, RemissionGuide):
+        flow: list[Flowable] = list(_carrier_fields(voucher, words))
+        for recipient in voucher.recipients:
+            entries = [
+                (_described(item), _quantity(item.quantity), item.code or "")
+                for item in recipient.items
+            ]
+            flow += [
+                _rule(width),
+                *_recipient_fields(recipient, words),
+                Spacer(1, GAP / 2),
+                _ticket_list((columns["description"], columns["quantity"]), entries, width),
+            ]
+        return flow
+    if isinstance(voucher, Withholding):
+        retentions = words["retentions"]
+        entries = [
+            (
+                SEPARATOR.join([f"{tax} {percentage}%", f"{document} {number}"]),
+                withheld,
+                f"{retentions['base']} {base}",
+            )
+            for document, number, _, _, tax, base, percentage, withheld in _retention_entries(
+                voucher, words
+            )
+        ]
+        return [
+            *_subject_fields(voucher, words),
+            _rule(width),
+            _ticket_list((retentions["tax"], retentions["withheld"]), entries, width),
+        ]
+    modified = _modified_fields(voucher.modified, words) if voucher.modified else []
+    return [
+        *_buyer_fields(voucher, words),
+        *modified,
+        _rule(width),
+        _ticket_list(
+            (columns["description"], columns["total"]), _priced_entries(voucher, words), width
+        ),
+    ]
+
+
 def _ticket(issued: Issued, words: Labels, logo: Logo | None) -> bytes:
     width = TICKET_WIDTH - 2 * TICKET_MARGIN - 2 * FRAME_PADDING
-    modified = issued.voucher.modified
-    payment = _payment_box(issued, words, width)
+    payment = _payment_box(_payments(issued), words, width)
+    totals = _totals(issued, words, width, TICKET_TOTAL_SHARES)
     flow: list[Flowable] = [
         *_ticket_issuer(issued, words, logo),
         _rule(width),
         *_ticket_voucher(issued, words),
         _rule(width),
-        *_buyer_fields(issued, words),
-        *(_modified_fields(modified, words) if modified is not None else []),
-        _rule(width),
-        _ticket_lines(issued, words, width),
+        *_ticket_body(issued, words, width),
         Spacer(1, GAP),
-        _totals(issued, words, width, TICKET_TOTAL_SHARES),
-        Spacer(1, GAP),
+        *([] if totals is None else [totals, Spacer(1, GAP)]),
         _extra_box(issued, words, width),
         *([] if payment is None else [Spacer(1, GAP), payment]),
     ]
@@ -530,7 +763,7 @@ def _ticket(issued: Issued, words: Labels, logo: Logo | None) -> bytes:
         rightMargin=TICKET_MARGIN,
         topMargin=TICKET_MARGIN,
         bottomMargin=TICKET_MARGIN,
-        title=f"{words['documents'][issued.voucher.kind]} {issued.voucher.number}",
+        title=_title(issued, words),
     )
     strip.build(flow)
     return buffer.getvalue()

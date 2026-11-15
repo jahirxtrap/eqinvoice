@@ -1,8 +1,65 @@
 {
   "documents": {
     "invoice": "FACTURA",
-    "credit_note": "NOTA DE CRÉDITO"
+    "credit_note": "NOTA DE CRÉDITO",
+    "debit_note": "NOTA DE DÉBITO",
+    "purchase_settlement": "LIQUIDACIÓN DE COMPRA DE BIENES Y PRESTACIÓN DE SERVICIOS",
+    "remission_guide": "GUÍA DE REMISIÓN",
+    "withholding": "COMPROBANTE DE RETENCIÓN"
   },
+  "documentCodes": {
+    "01": "FACTURA",
+    "02": "NOTA DE VENTA",
+    "03": "LIQUIDACIÓN DE COMPRA",
+    "04": "NOTA DE CRÉDITO",
+    "05": "NOTA DE DÉBITO",
+    "06": "GUÍA DE REMISIÓN",
+    "07": "COMPROBANTE DE RETENCIÓN"
+  },
+  "address": "Dirección",
+  "charges": {
+    "reason": "Razón de la modificación",
+    "value": "Valor de la modificación"
+  },
+  "carrierId": "Identificación (Transportista)",
+  "carrierName": "Razón Social / Nombres y Apellidos",
+  "plate": "Placa",
+  "departure": "Punto de Partida",
+  "startsOn": "Fecha inicio Transporte",
+  "endsOn": "Fecha fin Transporte",
+  "supporting": "Comprobante de Venta",
+  "supportingIssuedOn": "Fecha de Emisión",
+  "supportingAuthorization": "Número de Autorización",
+  "transferReason": "Motivo Traslado",
+  "destination": "Destino (Punto de llegada)",
+  "recipientId": "Identificación (Destinatario)",
+  "recipientName": "Razón Social / Nombres Apellidos",
+  "customsDocument": "Documento Aduanero",
+  "destinationEstablishment": "Código Establecimiento Destino",
+  "route": "Ruta",
+  "items": {
+    "quantity": "Cantidad",
+    "description": "Descripción",
+    "code": "Código Principal",
+    "extraCode": "Código Auxiliar"
+  },
+  "fiscalPeriod": "Periodo Fiscal",
+  "retentions": {
+    "document": "Comprobante",
+    "number": "Número",
+    "issuedOn": "Fecha Emisión",
+    "fiscalYear": "Ejercicio Fiscal",
+    "base": "Base Imponible para la Retención",
+    "tax": "Impuesto",
+    "percentage": "Porcentaje Retención",
+    "withheld": "Valor Retenido"
+  },
+  "retentionTaxes": {
+    "1": "RENTA",
+    "2": "IVA",
+    "6": "ISD"
+  },
+  "withheldTotal": "TOTAL RETENIDO",
   "ruc": "R.U.C.",
   "number": "No.",
   "authorizationNumber": "NÚMERO DE AUTORIZACIÓN",

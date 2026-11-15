@@ -6,9 +6,19 @@ import httpx
 import pytest
 from lxml import etree
 
-from eqinvoice import Environment, SimulatedSri, SriUnavailable, SriWebServices
+from eqinvoice import (
+    Environment,
+    SimulatedSri,
+    SriUnavailable,
+    SriWebServices,
+    Voucher,
+    VoucherInvalid,
+    VoucherKind,
+    access_key,
+    batch,
+)
 from eqinvoice.protocol import AUTHORIZATION_PATH, RECEPTION_PATH
-from tests.builders import a_voucher, signed
+from tests.builders import ISSUED_ON, RUC, a_voucher, signed
 
 RECEIVED = (
     b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>'
@@ -113,3 +123,50 @@ def test_the_simulated_sri_authorizes_what_it_received_and_nothing_else():
     record = etree.fromstring(answer.record.encode())
     assert record.findtext("numeroAutorizacion") == voucher.access_key
     assert record.findtext("ambiente") == "PRUEBAS"
+
+
+def _lote_vouchers() -> tuple[Voucher, Voucher]:
+    first = a_voucher()
+    second = a_voucher(
+        sequential=8,
+        access_key=access_key(
+            ISSUED_ON, VoucherKind.INVOICE, RUC, Environment.TEST, "001", "001", 8
+        ),
+    )
+    return first, second
+
+
+def test_a_lote_carries_its_vouchers_under_a_key_of_its_own():
+    vouchers = _lote_vouchers()
+    key = access_key(ISSUED_ON, VoucherKind.INVOICE, RUC, Environment.TEST, "001", "900", 1)
+    lote = etree.fromstring(batch([signed(held) for held in vouchers], RUC, key))
+    assert (lote.tag, lote.get("version"), lote.findtext("claveAcceso")) == ("lote", "1.0.0", key)
+    sri = SimulatedSri()
+    assert sri.send(etree.tostring(lote)).received is True
+    answers = sri.authorize_batch(key)
+    assert set(answers) == {held.access_key for held in vouchers}
+    assert all(answer.authorized for answer in answers.values())
+
+
+def test_a_lote_takes_from_one_to_fifty_vouchers():
+    with pytest.raises(VoucherInvalid):
+        batch([], RUC, "1")
+    with pytest.raises(VoucherInvalid):
+        batch([b"<factura/>"] * 51, RUC, "1")
+
+
+def test_a_lotes_authorizations_come_back_by_each_vouchers_key():
+    authorized, refused = _lote_vouchers()
+    response = etree.fromstring(PROCESSING.replace(b"Comprobante>", b"Lote>"))
+    held = response.find(".//autorizaciones")
+    for voucher, state in ((authorized, "AUTORIZADO"), (refused, "NO AUTORIZADO")):
+        record = etree.SubElement(held, "autorizacion")
+        etree.SubElement(record, "estado").text = state
+        etree.SubElement(record, "fechaAutorizacion").text = "2026-10-27T12:55:15-05:00"
+        etree.SubElement(record, "comprobante").text = signed(voucher).decode()
+        etree.SubElement(record, "mensajes")
+    asked: list[httpx.Request] = []
+    answers = answering(etree.tostring(response), asked=asked).authorize_batch("1")
+    assert answers[authorized.access_key].authorized is True
+    assert answers[refused.access_key].authorized is False
+    assert b"autorizacionComprobanteLote" in asked[0].content

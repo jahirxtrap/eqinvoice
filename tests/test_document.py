@@ -15,7 +15,16 @@ from eqinvoice import (
     issuer_legend,
     rimpe_legend,
 )
-from tests.builders import CASH, RUC, TRANSFER, a_line, a_voucher, an_issuer, signed
+from tests.builders import (
+    CASH,
+    RUC,
+    TRANSFER,
+    a_document,
+    a_line,
+    a_voucher,
+    an_issuer,
+    signed,
+)
 
 
 def tree_of(**overrides) -> etree._Element:
@@ -24,7 +33,7 @@ def tree_of(**overrides) -> etree._Element:
 
 def test_an_invoice_and_a_credit_note_satisfy_the_sris_schema():
     for kind in VoucherKind:
-        signed(a_voucher(kind))
+        signed(a_document(kind))
 
 
 def test_one_the_schema_would_refuse_never_leaves():
@@ -84,7 +93,7 @@ def test_a_rimpe_taxpayer_carries_the_legend_its_schema_fixes():
 @pytest.mark.parametrize("kind", list(VoucherKind))
 def test_a_popular_business_carries_the_legend_the_ficha_tecnica_requires(kind):
     issuer = an_issuer(rimpe=True, popular_business=True)
-    tree = etree.fromstring(signed(a_voucher(kind), issuer))
+    tree = etree.fromstring(signed(a_document(kind), issuer))
     assert tree.findtext("infoTributaria/contribuyenteRimpe") == issuer_legend(issuer)
     assert issuer_legend(issuer) == "CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE"
     assert issuer_legend(an_issuer()) is None

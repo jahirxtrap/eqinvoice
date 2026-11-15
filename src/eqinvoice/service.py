@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import ssl
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,17 +11,21 @@ from typing import Protocol
 import httpx
 from lxml import etree
 
-from eqinvoice.errors import SriUnavailable
+from eqinvoice.errors import SriUnavailable, VoucherInvalid
 from eqinvoice.model import Environment
 from eqinvoice.protocol import (
     ALREADY_REGISTERED,
     AUTHORIZATION_NS,
     AUTHORIZATION_PATH,
     AUTHORIZED,
+    BATCH_ROOT,
+    BATCH_VERSION,
     CLOCK,
     ENVIRONMENT_CODES,
     ENVIRONMENT_NAMES,
     HOSTS,
+    MOST_BATCH_BYTES,
+    MOST_BATCH_VOUCHERS,
     NOT_AUTHORIZED,
     PARSER,
     RECEIVED,
@@ -72,6 +76,26 @@ class Sri(Protocol):
     def send(self, document: bytes) -> Reception: ...
 
     def authorize(self, access_key: str) -> Authorization | None: ...
+
+
+class BatchSri(Sri, Protocol):
+    def authorize_batch(self, access_key: str) -> dict[str, Authorization]: ...
+
+
+def batch(documents: Sequence[bytes], ruc: str, access_key: str) -> bytes:
+    """Signed vouchers in one lote under its own access key, sent with Sri.send like a voucher."""
+    if not 0 < len(documents) <= MOST_BATCH_VOUCHERS:
+        raise VoucherInvalid(f"A lote carries from 1 to {MOST_BATCH_VOUCHERS} vouchers")
+    lote = etree.Element(BATCH_ROOT, version=BATCH_VERSION)
+    etree.SubElement(lote, "claveAcceso").text = access_key
+    etree.SubElement(lote, "ruc").text = ruc
+    held = etree.SubElement(lote, "comprobantes")
+    for document in documents:
+        etree.SubElement(held, "comprobante").text = etree.CDATA(document.decode())
+    written = etree.tostring(lote, xml_declaration=True, encoding="UTF-8")
+    if len(written) > MOST_BATCH_BYTES:
+        raise VoucherInvalid(f"A lote weighs at most {MOST_BATCH_BYTES} bytes, not {len(written)}")
+    return written
 
 
 def _messages(element: etree._Element | None) -> tuple[Message, ...]:
@@ -168,21 +192,49 @@ class SriWebServices:
                 AUTHORIZATION_NS, "autorizacionComprobante", "claveAccesoComprobante", access_key
             ),
         )
-        records = answer.findall(".//RespuestaAutorizacionComprobante/autorizaciones/autorizacion")
-        if not records:
-            return None
-        chosen = next(
-            (record for record in records if _text(record, "estado") == AUTHORIZED), records[-1]
+        return _standing(
+            answer.findall(".//RespuestaAutorizacionComprobante/autorizaciones/autorizacion")
         )
-        state = _text(chosen, "estado")
-        if state not in (AUTHORIZED, NOT_AUTHORIZED):
-            return None
-        return Authorization(
-            authorized=state == AUTHORIZED,
-            authorized_at=_stamp(_text(chosen, "fechaAutorizacion")),
-            record=_serialized(_kept(chosen)),
-            messages=_messages(chosen.find("mensajes")),
+
+    def authorize_batch(self, access_key: str) -> dict[str, Authorization]:
+        """How each voucher of a lote stands, by its own access key; none while still processing."""
+        answer = self._post(
+            AUTHORIZATION_PATH,
+            _envelope(
+                AUTHORIZATION_NS, "autorizacionComprobanteLote", "claveAccesoLote", access_key
+            ),
         )
+        records: dict[str, list[etree._Element]] = {}
+        for record in answer.iterfind(".//RespuestaAutorizacionLote/autorizaciones/autorizacion"):
+            records.setdefault(_voucher_key(record), []).append(record)
+        return {
+            key: standing
+            for key, held in records.items()
+            if (standing := _standing(held)) is not None
+        }
+
+
+def _voucher_key(record: etree._Element) -> str:
+    inner = _text(record, "comprobante")
+    held = etree.fromstring(inner.encode(), PARSER) if inner else None
+    return _text(held, "infoTributaria/claveAcceso") or _text(record, "numeroAutorizacion")
+
+
+def _standing(records: list[etree._Element]) -> Authorization | None:
+    if not records:
+        return None
+    chosen = next(
+        (record for record in records if _text(record, "estado") == AUTHORIZED), records[-1]
+    )
+    state = _text(chosen, "estado")
+    if state not in (AUTHORIZED, NOT_AUTHORIZED):
+        return None
+    return Authorization(
+        authorized=state == AUTHORIZED,
+        authorized_at=_stamp(_text(chosen, "fechaAutorizacion")),
+        record=_serialized(_kept(chosen)),
+        messages=_messages(chosen.find("mensajes")),
+    )
 
 
 def _now() -> datetime:
@@ -193,11 +245,28 @@ class SimulatedSri:
     def __init__(self, clock: Callable[[], datetime] = _now) -> None:
         self._clock = clock
         self._received: dict[str, bytes] = {}
+        self._batches: dict[str, tuple[str, ...]] = {}
 
     def send(self, document: bytes) -> Reception:
-        voucher = etree.fromstring(document, PARSER)
-        self._received[_text(voucher, "infoTributaria/claveAcceso")] = document
+        held = etree.fromstring(document, PARSER)
+        if held.tag != BATCH_ROOT:
+            self._received[_text(held, "infoTributaria/claveAcceso")] = document
+            return Reception(received=True, messages=())
+        inside = [(item.text or "").encode() for item in held.iterfind("comprobantes/comprobante")]
+        for voucher in inside:
+            self.send(voucher)
+        self._batches[_text(held, "claveAcceso")] = tuple(
+            _text(etree.fromstring(voucher, PARSER), "infoTributaria/claveAcceso")
+            for voucher in inside
+        )
         return Reception(received=True, messages=())
+
+    def authorize_batch(self, access_key: str) -> dict[str, Authorization]:
+        return {
+            key: standing
+            for key in self._batches.get(access_key, ())
+            if (standing := self.authorize(key)) is not None
+        }
 
     def authorize(self, access_key: str) -> Authorization | None:
         document = self._received.get(access_key)

@@ -18,7 +18,7 @@ from lxml import etree
 
 from eqinvoice.document import build, validate
 from eqinvoice.errors import CredentialProblem, CredentialRefused
-from eqinvoice.model import Issuer, Voucher
+from eqinvoice.model import AnyVoucher, Issuer
 from eqinvoice.protocol import CLOCK, VOUCHER_ID
 
 DS = "http://www.w3.org/2000/09/xmldsig#"
@@ -340,7 +340,9 @@ def sign(voucher: etree._Element, credential: Credential, at: datetime) -> bytes
     return etree.tostring(voucher, xml_declaration=True, encoding="UTF-8")
 
 
-def sign_voucher(voucher: Voucher, issuer: Issuer, credential: Credential, now: datetime) -> bytes:
+def sign_voucher(
+    voucher: AnyVoucher, issuer: Issuer, credential: Credential, now: datetime
+) -> bytes:
     """The voucher built, signed and checked against the SRI's schema, ready to send."""
     document = sign(build(voucher, issuer), usable(credential, now), now)
     validate(voucher.kind, document)
