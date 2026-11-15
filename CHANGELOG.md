@@ -1,2 +1,3 @@
-- Added `period_sales`, which adds up a period's vouchers per IVA rate as the IVA declaration asks for them: the invoiced base, that base less credit notes, and its IVA
-- Added the `summarize_sales` tool, with a period's authorized sales and the vouchers still pending in it
+- Fixed the RIMPE legend of a popular business, which carried the entrepreneur's: the registry's RIMPE category now reaches the issuer, its vouchers, its printed copies and the records read back, and the check before sending admits the legend the SRI's ficha técnica requires
+- Added `PaymentForm`, the SRI's table of payment forms, for `Payment.form`: a record with a code outside it is refused, and `draft_invoice` offers only those codes
+- Added `voucher_number`, which writes a voucher's number as the SRI prints it
