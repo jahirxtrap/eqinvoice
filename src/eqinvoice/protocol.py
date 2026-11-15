@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from importlib import metadata
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -109,11 +110,13 @@ BATCH_ROOT = "lote"
 BATCH_VERSION = "1.0.0"
 MOST_BATCH_VOUCHERS = 50
 MOST_BATCH_BYTES = 500 * 1024
+MOST_VOUCHER_BYTES = 320 * 1024
 FINAL_CONSUMER_ID = "9999999999999"
 FINAL_CONSUMER_NAME = "CONSUMIDOR FINAL"
 VAT_TAX = "2"
+ZERO_VAT_RATE = "0"
 VAT_RATES = {
-    "0": Decimal("0"),
+    ZERO_VAT_RATE: Decimal("0"),
     "2": Decimal("12"),
     "3": Decimal("14"),
     "4": Decimal("15"),
@@ -149,10 +152,26 @@ TAXPAYER_PATH = (
 ESTABLISHMENTS_PATH = (
     "/sri-catastro-sujeto-servicio-internet/rest/Establecimiento/consultarPorNumeroRuc"
 )
-REGISTRY_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130 Safari/537.36",
-    "Accept": "application/json",
-}
+PACKAGE = "eqinvoice"
+HOMEPAGE_LABEL = "Homepage"
+PROJECT_URL_SEPARATOR = ", "
+
+
+def _user_agent() -> str:
+    """The library by name, version and homepage, as the SRI's servers see it."""
+    try:
+        released = metadata.metadata(PACKAGE)
+    except metadata.PackageNotFoundError:
+        return PACKAGE
+    urls = dict(
+        entry.split(PROJECT_URL_SEPARATOR, 1) for entry in released.get_all("Project-URL") or ()
+    )
+    agent = f"{PACKAGE}/{released['Version']}"
+    return f"{agent} (+{urls[HOMEPAGE_LABEL]})" if HOMEPAGE_LABEL in urls else agent
+
+
+USER_AGENT = _user_agent()
+REGISTRY_HEADERS = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 ACTIVE_TAXPAYER = "ACTIVO"
 OPEN_ESTABLISHMENT = "ABIERTO"
 RIMPE_REGIME = "RIMPE"

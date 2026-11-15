@@ -106,6 +106,19 @@ def test_the_issuer_takes_the_trade_name_of_its_establishment(tmp_path):
     assert desk.configure(RUC, Environment.TEST, "001", "100").issuer.trade_name is None
 
 
+def test_without_an_establishment_the_issuer_issues_from_its_head_office(tmp_path):
+    offices = (
+        Establishment("001", "LOJA / LOJA / SUCRE / AV. UNIVERSITARIA", None, False, False),
+        Establishment("003", "LOJA / LOJA / EL VALLE / AV. SALVADOR BUSTAMANTE", None, True, True),
+    )
+    desk = a_desk(tmp_path, issuer=a_taxpayer(establishments=offices))
+    profile = desk.configure(RUC, Environment.TEST, None, "100")
+    assert (profile.establishment, profile.establishment_address) == (
+        "003",
+        "LOJA / LOJA / EL VALLE / AV. SALVADOR BUSTAMANTE",
+    )
+
+
 def test_an_agent_or_special_taxpayer_issues_with_its_numbers(tmp_path):
     agent = a_taxpayer(withholding_agent=True, special_taxpayer=True)
     desk = a_desk(tmp_path, issuer=agent)

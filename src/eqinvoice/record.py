@@ -56,6 +56,7 @@ from eqinvoice.protocol import (
     TAX_TOTALS,
     TOTAL_TAGS,
     YES,
+    ZERO_VAT_RATE,
 )
 from eqinvoice.protocol import text_at as _text
 
@@ -110,20 +111,24 @@ def _lines(root: etree._Element, kind: VoucherKind) -> tuple[Line, ...]:
     )
 
 
-def _assigned(amounts: list[Decimal], bases: list[Decimal]) -> list[int] | None:
-    left, owners = list(bases), []
+def _assigned(amounts: list[Decimal], bases: list[Decimal]) -> list[int | None] | None:
+    """Each amount's base, filling every base exactly; None for one that no base takes."""
+    left, owners = list(bases), list[int | None]()
+    ahead = [sum(amounts[at:], ZERO) for at in range(len(amounts) + 1)]
 
     def place(at: int) -> bool:
-        if at == len(amounts):
-            return not any(left)
-        for index, rest in enumerate(left):
-            if amounts[at] <= rest:
+        if at == len(amounts) or ahead[at] < sum(left, ZERO):
+            return at == len(amounts) and not any(left)
+        fitting = [index for index, rest in enumerate(left) if amounts[at] <= rest]
+        for index in (*fitting, None):
+            if index is not None:
                 left[index] -= amounts[at]
-                owners.append(index)
-                if place(at + 1):
-                    return True
+            owners.append(index)
+            if place(at + 1):
+                return True
+            owners.pop()
+            if index is not None:
                 left[index] += amounts[at]
-                owners.pop()
         return False
 
     return owners if place(0) else None
@@ -136,7 +141,7 @@ def _spread(total: Decimal, amounts: list[Decimal]) -> list[Decimal]:
 
 
 def _charges(root: etree._Element, info: etree._Element) -> tuple[Line, ...]:
-    """A debit note's reasons as lines; each takes the rate whose base its value fills."""
+    """A debit note's reasons as lines: each takes the rate whose base it fills, else none."""
     reasons = [
         (_text(held, "razon"), _decimal(held, "valor")) for held in root.iterfind("motivos/motivo")
     ]
@@ -152,11 +157,13 @@ def _charges(root: etree._Element, info: etree._Element) -> tuple[Line, ...]:
     owners = _assigned([value for _, value in reasons], [group.base for group in groups])
     if owners is None:
         raise VoucherInvalid("The debit note's reasons do not add up to its taxed bases")
+    untaxed = TaxGroup(ZERO_VAT_RATE, ZERO, ZERO, ZERO)
     vats: dict[int, Decimal] = {}
     for index, group in enumerate(groups):
         mine = [at for at, owner in enumerate(owners) if owner == index]
         if mine:
             vats.update(zip(mine, _spread(group.vat, [reasons[at][1] for at in mine]), strict=True))
+    owned = [untaxed if owner is None else groups[owner] for owner in owners]
     return tuple(
         Line(
             code="",
@@ -165,9 +172,9 @@ def _charges(root: etree._Element, info: etree._Element) -> tuple[Line, ...]:
             unit_price=value,
             discount=ZERO,
             subtotal=value,
-            vat=vats[at],
-            rate_code=groups[owners[at]].code,
-            rate_percentage=groups[owners[at]].rate,
+            vat=vats.get(at, ZERO),
+            rate_code=owned[at].code,
+            rate_percentage=owned[at].rate,
         )
         for at, (reason, value) in enumerate(reasons)
     )
@@ -307,10 +314,42 @@ def _abroad(support: etree._Element) -> Abroad | None:
     )
 
 
-def _support(support: etree._Element) -> SupportDocument:
-    reference = _reference(support)
+def _retention(held: etree._Element) -> Retention:
+    return Retention(
+        tax=_listed(RetentionTax, _text(held, "codigo")),
+        code=_text(held, "codigoRetencion"),
+        base=_decimal(held, "baseImponible"),
+        percentage=_decimal(held, "porcentajeRetener"),
+        withheld=_decimal(held, "valorRetenido"),
+    )
+
+
+def _named_document(element: etree._Element) -> Reference:
+    reference = _reference(element)
     if reference is None:
         raise VoucherInvalid("A withholding's support document names no document")
+    return reference
+
+
+def _legacy_documents(root: etree._Element) -> tuple[SupportDocument, ...]:
+    """A 1.0.0 withholding's retentions, gathered by the document each one names."""
+    gathered: dict[Reference, list[Retention]] = {}
+    for held in root.iterfind("impuestos/impuesto"):
+        gathered.setdefault(_named_document(held), []).append(_retention(held))
+    return tuple(
+        SupportDocument(
+            support_code="",
+            document=reference,
+            taxes=(),
+            retentions=tuple(retentions),
+            payments=(),
+        )
+        for reference, retentions in gathered.items()
+    )
+
+
+def _support(support: etree._Element) -> SupportDocument:
+    reference = _named_document(support)
     registered = _text(support, "fechaRegistroContable")
     return SupportDocument(
         support_code=_text(support, "codSustento"),
@@ -324,16 +363,7 @@ def _support(support: etree._Element) -> SupportDocument:
             )
             for tax in support.iterfind("impuestosDocSustento/impuestoDocSustento")
         ),
-        retentions=tuple(
-            Retention(
-                tax=_listed(RetentionTax, _text(held, "codigo")),
-                code=_text(held, "codigoRetencion"),
-                base=_decimal(held, "baseImponible"),
-                percentage=_decimal(held, "porcentajeRetener"),
-                withheld=_decimal(held, "valorRetenido"),
-            )
-            for held in support.iterfind("retenciones/retencion")
-        ),
+        retentions=tuple(_retention(held) for held in support.iterfind("retenciones/retencion")),
         payments=_payments(support),
         registered_on=_date(registered) if registered else None,
         abroad=_abroad(support),
@@ -347,7 +377,8 @@ def _withholding(root: etree._Element, info: etree._Element, email: str | None) 
         "fiscal_period": datetime.strptime(
             _text(info, "periodoFiscal"), FISCAL_PERIOD_FORMAT
         ).date(),
-        "documents": tuple(_support(held) for held in root.iterfind("docsSustento/docSustento")),
+        "documents": tuple(_support(held) for held in root.iterfind("docsSustento/docSustento"))
+        or _legacy_documents(root),
         "related_party": _text(info, "parteRel") == YES,
         "subject_type": _listed(SubjectType, subject_type) if subject_type else None,
     }

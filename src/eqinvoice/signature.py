@@ -17,9 +17,9 @@ from cryptography.x509.oid import NameOID
 from lxml import etree
 
 from eqinvoice.document import build, validate
-from eqinvoice.errors import CredentialProblem, CredentialRefused
+from eqinvoice.errors import CredentialProblem, CredentialRefused, VoucherInvalid
 from eqinvoice.model import AnyVoucher, Issuer
-from eqinvoice.protocol import CLOCK, VOUCHER_ID
+from eqinvoice.protocol import CLOCK, MOST_VOUCHER_BYTES, VOUCHER_ID
 
 DS = "http://www.w3.org/2000/09/xmldsig#"
 ETSI = "http://uri.etsi.org/01903/v1.3.2#"
@@ -36,8 +36,52 @@ KEY_BITS = 2048
 PUBLIC_EXPONENT = 65537
 ID_DIGITS = 6
 LONG_FORM = 0x80
+OID_ARC = 40
 PKCS7_DATA = bytes.fromhex("2a864886f70d010701")
 SHROUDED_KEY_BAG = bytes.fromhex("2a864886f70d010c0a0102")
+RFC2253_KEYWORDS = {
+    "2.5.4.3": "CN",
+    "2.5.4.6": "C",
+    "2.5.4.7": "L",
+    "2.5.4.8": "ST",
+    "2.5.4.9": "STREET",
+    "2.5.4.10": "O",
+    "2.5.4.11": "OU",
+    "0.9.2342.19200300.100.1.1": "UID",
+    "0.9.2342.19200300.100.1.25": "DC",
+}
+RFC2253_ESCAPED = ',=+<>#;"\\'
+RFC2253_EDGES = " \r"
+RFC2253_NUL = "\\00"
+DIRECTORY_STRINGS = {
+    0x0C: "utf-8",
+    0x13: "latin-1",
+    0x14: "latin-1",
+    0x16: "latin-1",
+    0x1B: "latin-1",
+    0x1E: "utf-16-be",
+}
+ORGANIZATION_IDENTIFIER = x509.ObjectIdentifier("2.5.4.97")
+TAXPAYER_PREFIX, COMPANY_PREFIX = "TINEC-", "VATEC-"
+RUC_DIGITS = 13
+CERTIFICATE_RUC_FIELDS = frozenset(
+    {
+        "1.3.6.1.4.1.37746.3.11",
+        "1.3.6.1.4.1.37947.3.11",
+        "1.3.6.1.4.1.18332.3.11",
+        "1.3.6.1.4.1.37442.3.11",
+        "1.3.6.1.4.1.43745.1.3.11",
+        "1.3.6.1.4.1.55519.1.1.1.5.2.4",
+        "1.3.6.1.4.1.47286.102.3.11",
+        "1.3.6.1.4.1.52643.3.11",
+        "1.3.6.1.4.1.57153.102.3.11",
+        "1.3.6.1.4.1.59198.3.11",
+        "1.3.6.1.4.1.59382.3.11",
+        "1.3.6.1.4.1.34380.3.11",
+        "1.3.6.1.4.1.61305.3.11",
+        "1.3.6.1.4.1.56105.3.11",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +97,7 @@ class SignatureDetails:
     serial: str
     valid_from: datetime
     valid_until: datetime
+    rucs: tuple[str, ...] = ()
 
 
 def _matching(key: object, certificates: Sequence[x509.Certificate]) -> x509.Certificate | None:
@@ -66,23 +111,88 @@ def _matching(key: object, certificates: Sequence[x509.Certificate]) -> x509.Cer
     return None
 
 
-def _content(data: bytes) -> tuple[bytes, bytes]:
-    """The first DER element's content and whatever follows it."""
+def _element(data: bytes) -> tuple[bytes, bytes, bytes]:
+    """The first DER element's content, the element whole, and whatever follows it."""
     length, start = data[1], 2
     if length & LONG_FORM:
         count = length ^ LONG_FORM
         if not count:
             raise ValueError("indefinite lengths are BER, not DER")
         length, start = int.from_bytes(data[start : start + count], "big"), start + count
-    return data[start : start + length], data[start + length :]
+    end = start + length
+    return data[start:end], data[:end], data[end:]
 
 
-def _elements(data: bytes) -> list[bytes]:
+def _content(data: bytes) -> tuple[bytes, bytes]:
+    content, _, rest = _element(data)
+    return content, rest
+
+
+def _elements(data: bytes, whole: bool = False) -> list[bytes]:
     found = []
     while data:
-        content, data = _content(data)
-        found.append(content)
+        content, element, data = _element(data)
+        found.append(element if whole else content)
     return found
+
+
+def _dotted(content: bytes) -> str:
+    numbers, value = [], 0
+    for byte in content:
+        value = value << 7 | byte & ~LONG_FORM
+        if not byte & LONG_FORM:
+            numbers.append(value)
+            value = 0
+    arc = min(numbers[0] // OID_ARC, 2)
+    return ".".join(str(number) for number in (arc, numbers[0] - arc * OID_ARC, *numbers[1:]))
+
+
+def _text(element: bytes) -> str | None:
+    """A DER directory string's text, decoded as Java does; None for any other value."""
+    codec = DIRECTORY_STRINGS.get(element[0])
+    return _content(element)[0].decode(codec, errors="replace") if codec else None
+
+
+def _escaped(value: str) -> str:
+    inner = "".join(
+        RFC2253_NUL if char == "\0" else f"\\{char}" if char in RFC2253_ESCAPED else char
+        for char in value
+    )
+    lead, trail = len(inner) - len(inner.lstrip(RFC2253_EDGES)), len(inner.rstrip(RFC2253_EDGES))
+    return "".join(
+        char if lead <= index < trail else f"\\{char}" for index, char in enumerate(inner)
+    )
+
+
+def issuer_name(certificate: x509.Certificate) -> str:
+    """The issuer as Java writes it in RFC 2253, as the SRI reads it: keywords, else #DER hex."""
+    written = []
+    for relative in reversed(_elements(_content(certificate.issuer.public_bytes())[0])):
+        pairs = []
+        for attribute in _elements(relative):
+            kind, value = _elements(attribute, whole=True)
+            oid = _dotted(_content(kind)[0])
+            keyword = RFC2253_KEYWORDS.get(oid)
+            text = _text(value) if keyword else None
+            written_value = _escaped(text) if text is not None else f"#{value.hex()}"
+            pairs.append(f"{keyword or oid}={written_value}")
+        written.append("+".join(pairs))
+    return ",".join(written)
+
+
+def certificate_rucs(certificate: x509.Certificate) -> tuple[str, ...]:
+    """The RUCs a certificate names: in its organizationIdentifier or its entity's own field."""
+    named = [
+        str(attribute.value).removeprefix(TAXPAYER_PREFIX).removeprefix(COMPANY_PREFIX)
+        for attribute in certificate.subject.get_attributes_for_oid(ORGANIZATION_IDENTIFIER)
+    ]
+    for extension in certificate.extensions:
+        if extension.oid.dotted_string in CERTIFICATE_RUC_FIELDS:
+            try:
+                named.append(_text(getattr(extension.value, "value", b"")) or "")
+            except (IndexError, ValueError):
+                continue
+    return tuple(dict.fromkeys(ruc for ruc in named if len(ruc) == RUC_DIGITS and ruc.isdigit()))
 
 
 def _wrapped(explicit: bytes) -> list[bytes]:
@@ -191,6 +301,17 @@ def usable(credential: Credential, now: datetime) -> Credential:
     return credential
 
 
+def issued_to(credential: Credential, ruc: str) -> Credential:
+    """Refused if it names RUCs and not the issuer's; naming none, the SRI judges it."""
+    named = certificate_rucs(credential.certificate)
+    if named and ruc not in named:
+        raise CredentialRefused(
+            CredentialProblem.NOT_THE_ISSUERS,
+            f"the signature belongs to {', '.join(named)}, not to the issuer {ruc}",
+        )
+    return credential
+
+
 def _named(name: x509.Name) -> str:
     common = name.get_attributes_for_oid(NameOID.COMMON_NAME)
     return str(common[0].value) if common else name.rfc4514_string()
@@ -205,6 +326,7 @@ def details(credential: Credential) -> SignatureDetails:
         serial=str(held.serial_number),
         valid_from=held.not_valid_before_utc,
         valid_until=held.not_valid_after_utc,
+        rucs=certificate_rucs(held),
     )
 
 
@@ -280,9 +402,7 @@ def _signed_properties(
     _digest_method(digest)
     etree.SubElement(digest, _ds("DigestValue")).text = _digest(der)
     issuer_serial = etree.SubElement(cert, _etsi("IssuerSerial"))
-    etree.SubElement(
-        issuer_serial, _ds("X509IssuerName")
-    ).text = certificate.issuer.rfc4514_string()
+    etree.SubElement(issuer_serial, _ds("X509IssuerName")).text = issuer_name(certificate)
     etree.SubElement(issuer_serial, _ds("X509SerialNumber")).text = str(certificate.serial_number)
     data_object = etree.SubElement(
         etree.SubElement(properties, _etsi("SignedDataObjectProperties")),
@@ -344,6 +464,10 @@ def sign_voucher(
     voucher: AnyVoucher, issuer: Issuer, credential: Credential, now: datetime
 ) -> bytes:
     """The voucher built, signed and checked against the SRI's schema, ready to send."""
-    document = sign(build(voucher, issuer), usable(credential, now), now)
+    document = sign(build(voucher, issuer), issued_to(usable(credential, now), issuer.ruc), now)
     validate(voucher.kind, document)
+    if len(document) > MOST_VOUCHER_BYTES:
+        raise VoucherInvalid(
+            f"A voucher weighs at most {MOST_VOUCHER_BYTES} bytes, not {len(document)}"
+        )
     return document

@@ -36,7 +36,7 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 - **Vouchers**: invoices (factura 1.1.0), credit notes (nota de crédito 1.1.0), debit notes (nota de débito 1.0.0), purchase settlements (liquidación de compra 1.1.0), remission guides (guía de remisión 1.1.0) and withholdings (comprobante de retención 2.0.0), checked against the SRI's own XSD before they leave.
 - **Lote**: up to 50 signed vouchers sent at once under their own access key, with each one's authorization read back.
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
-- **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable, out of date or not for signing. A .p12 holding a key to encipher besides the one to sign, as the Banco Central del Ecuador issues them, signs with the key whose certificate is for digital signature.
+- **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable, out of date, not for signing or another taxpayer's. A .p12 holding a key to encipher besides the one to sign, as the Banco Central del Ecuador issues them, signs with the key whose certificate is for digital signature. The certificate's issuer is written as Java writes it, the way the SRI's validator compares it.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
 - **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime and RIMPE category, accounting duty, establishments and their trade names), and the issuer its vouchers name, with the legend of its regime.
 - **SRI catalogs**: the payment forms as `PaymentForm`, the IVA rates by their codes, and voucher numbers written as the SRI prints them.
@@ -117,7 +117,8 @@ if answer is not None and answer.authorized:
 - **Still processing**: `authorize` gives `None` while the SRI has not answered yet; ask again later with the same access key.
 - **Sent twice**: `reception.already_there` is true when the SRI already holds that access key, so its answer waits at the authorization service.
 - **Numbering**: the establishment, the emission point and the sequential belong to the caller's system. A sequential is never reused, and a voucher sent again keeps its access key.
-- **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries, of any kind.
+- **Signed documents**: `read_voucher(document)` gives back the voucher a signed or unsigned document carries, of any kind and from any signer, a withholding of the older 1.0.0 format included. A debit note's reason that none of its taxed bases takes reads as a line at 0 %.
+- **Whose signature**: `details(credential).rucs` lists the RUCs the certificate names, in its organizationIdentifier or in its certification entity's own field, so a system can check a .p12 the moment it is uploaded.
 - **Declaring**: `period_sales(vouchers, since, until)` adds up the authorized vouchers issued between both days per IVA rate: `gross` is the invoiced base, `net` that base less the credit notes and `vat` its IVA, the three columns of the monthly IVA declaration. Debit notes add up like invoices; settlements, guides and withholdings are no sales. Pass only what the SRI authorized.
 
 ### Every kind
@@ -179,8 +180,8 @@ sequential belong to lotes only. The SRI must have authorized the issuer to send
 <summary><b>When something fails</b></summary>
 
 - **`SriUnavailable`**: the SRI could not be reached or failed on its side. Nothing is lost: send the same document again later.
-- **`VoucherInvalid`**: the voucher breaks the SRI's schema (the message names every reason) or the record holds no voucher. Fix the data; sending it would only be returned.
-- **`CredentialRefused`**: the signature cannot sign. `problem` says why: `missing`, `unreadable` (wrong password or not a .p12), `out_of_date` or `not_for_signing` (no certificate in it carries the digitalSignature key usage).
+- **`VoucherInvalid`**: the voucher breaks the SRI's schema (the message names every reason), weighs more than the 320 KB the SRI takes, or the record holds no voucher. Fix the data; sending it would only be returned.
+- **`CredentialRefused`**: the signature cannot sign. `problem` says why: `missing`, `unreadable` (wrong password or not a .p12), `out_of_date`, `not_for_signing` (no certificate in it carries the digitalSignature key usage) or `not_the_issuers` (the certificate names RUCs and none is the issuer's; one that names none is left to the SRI).
 - **Turned down**: `answer.authorized` is false and `answer.messages` carry the SRI's codes and texts, as it wrote them.
 
 </details>
@@ -196,6 +197,7 @@ if taxpayer is not None and taxpayer.active:
 ```
 
 - **Nobody holds it**: `find` gives `None`. A registry that cannot be reached raises `SriUnavailable`.
+- **Who asks**: the registry and the web services see the library by name, `eqinvoice/<version> (+its homepage)`, as the User-Agent.
 - **The issuer**: `taxpayer.issuer()` names the head office address the registry lists. A withholding agent or a special taxpayer passes its resolution or number (`withholding_agent=`, `special_taxpayer=`), which the registry does not publish.
 
 ### Logo
@@ -239,7 +241,7 @@ claude mcp add --scope user eqinvoice \
   -- uvx --from "eqinvoice[mcp]" eqinvoice-mcp
 ```
 
-- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment and the emission point. The legal name, the address, the accounting duty, the RIMPE regime and the establishment's trade name come from the SRI's registry. A withholding agent or a special taxpayer adds its resolution number, which the registry does not publish, and the RUC of the invoicing system's provider can go on every voucher.
+- **Issuer**: `configure_issuer` takes a RUC, the environment (`test` or `production`), the establishment (its head office if none is given) and the emission point. The legal name, the address, the accounting duty, the RIMPE regime and the establishment's trade name come from the SRI's registry. A withholding agent or a special taxpayer adds its resolution number, which the registry does not publish, and the RUC of the invoicing system's provider can go on every voucher.
 - **Parties**: `register_client` keeps a buyer, supplier, carrier or withheld party with its email and, for settlements, its address. A RUC is named as the registry holds it; a cédula, a passport or a foreign tax number brings its name.
 - **Drafts first**: every voucher starts as a draft with the voucher it would become and a printed preview (a PDF). Nothing reaches the SRI until the draft is issued. Credit and debit notes go against an authorized invoice of the book, and a guide's recipient can name one as what it carries. Drafts kept by 1.1 still read and issue.
 - **Issuing**: `issue_draft` numbers the draft, signs it, sends it and files it as the SRI leaves it: `authorized` (with its record and its printed copy), `refused` (with the SRI's messages) or `pending`, which `check_voucher` asks for again.
@@ -319,4 +321,4 @@ A tag (`1.2.0`) publishes that version to PyPI and opens its release with `CHANG
 
 ## License
 
-MIT, see [LICENSE](https://github.com/jahirxtrap/eqinvoice/blob/main/LICENSE).
+MIT, see [LICENSE](https://github.com/jahirxtrap/eqinvoice/blob/main/LICENSE). The test fixtures keep their own licenses beside them: the Plus Jakarta Sans font (OFL) and the signed examples of [ec-sri-invoice-signer](https://github.com/bryancalisto/ec-sri-invoice-signer) (MIT).

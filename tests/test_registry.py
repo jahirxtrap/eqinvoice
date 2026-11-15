@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from importlib import metadata
 
 import httpx
 import pytest
@@ -59,7 +60,8 @@ def test_a_ruc_reads_as_the_taxpayer_with_its_establishments():
     assert office is not None and office.number == "001" and office.open
     assert asked[0].url.params["ruc"] == RUC
     assert asked[1].url.params["numeroRuc"] == RUC
-    assert "Mozilla" in asked[0].headers["User-Agent"]
+    agent = f"eqinvoice/{metadata.version('eqinvoice')} (+https://github.com/jahirxtrap/eqinvoice)"
+    assert {request.headers["User-Agent"] for request in asked} == {agent}
 
 
 def test_a_popular_business_reads_its_category():

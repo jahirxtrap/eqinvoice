@@ -16,6 +16,7 @@ class CredentialProblem(StrEnum):
     UNREADABLE = "unreadable"
     OUT_OF_DATE = "out_of_date"
     NOT_FOR_SIGNING = "not_for_signing"
+    NOT_THE_ISSUERS = "not_the_issuers"
 
 
 class CredentialRefused(RuntimeError):

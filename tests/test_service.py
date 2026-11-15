@@ -17,7 +17,7 @@ from eqinvoice import (
     access_key,
     batch,
 )
-from eqinvoice.protocol import AUTHORIZATION_PATH, RECEPTION_PATH
+from eqinvoice.protocol import AUTHORIZATION_PATH, RECEPTION_PATH, USER_AGENT
 from tests.builders import ISSUED_ON, RUC, a_voucher, signed
 
 RECEIVED = (
@@ -72,6 +72,7 @@ def test_a_voucher_goes_to_the_reception_service_inside_its_soap_envelope():
     assert answering(RECEIVED, asked=asked).send(document).received is True
     request = asked[0]
     assert request.url.host == "celcer.sri.gob.ec" and request.url.path == RECEPTION_PATH
+    assert request.headers["User-Agent"] == USER_AGENT
     carried = etree.fromstring(request.content).findtext(".//xml")
     assert base64.b64decode(carried) == document
 

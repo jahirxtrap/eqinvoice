@@ -59,7 +59,6 @@ INSTRUCTIONS = (
     "be deleted, only offset by a credit note. A pending voucher is asked for again with "
     "check_voucher."
 )
-DEFAULT_ESTABLISHMENT = "001"
 DEFAULT_POINT = "001"
 DEFAULT_PAYMENT_FORM = PaymentForm.WITH_FINANCIAL_SYSTEM
 ANTICIPATED = (
@@ -277,7 +276,10 @@ def look_up_taxpayer(ruc: str) -> Taxpayer:
 def configure_issuer(
     ruc: str,
     environment: Environment,
-    establishment: str = DEFAULT_ESTABLISHMENT,
+    establishment: Annotated[
+        str | None,
+        Field(description="Its establishment's code, such as 002; the head office if absent"),
+    ] = None,
     point: str = DEFAULT_POINT,
     withholding_agent: Annotated[
         str | None,

@@ -34,12 +34,17 @@ from eqinvoice.protocol import (
     RETURNED,
     SOAP_NS,
     STILL_PROCESSING,
+    USER_AGENT,
 )
 from eqinvoice.protocol import text_at as _text
 
 TIMEOUT_SECONDS = 30.0
 SERVER_FAILURE = 500
-SOAP_HEADERS = {"Content-Type": "text/xml; charset=utf-8", "SOAPAction": '""'}
+SOAP_HEADERS = {
+    "Content-Type": "text/xml; charset=utf-8",
+    "SOAPAction": '""',
+    "User-Agent": USER_AGENT,
+}
 
 
 @dataclass(frozen=True)
