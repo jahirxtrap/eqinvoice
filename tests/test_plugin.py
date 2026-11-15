@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 AUTHOR = "jahirtrap"
 REPOSITORY = "https://github.com/jahirxtrap/eqinvoice"
 PLUGIN = ROOT / "plugin"
+SERVER_ICON = ROOT / "src" / "eqinvoice_mcp" / "icon.svg"
 SETTINGS = ("EQINVOICE_BOOK", "EQINVOICE_P12", "EQINVOICE_P12_PASSWORD")
 
 
@@ -36,6 +37,11 @@ def test_the_manifest_matches_its_entry_and_the_package():
     assert MANIFEST["author"]["name"] == AUTHOR
     assert MANIFEST["repository"] == MANIFEST["homepage"] == REPOSITORY
     assert entry["source"] == "./plugin"
+
+
+def test_the_plugin_shows_the_servers_icon():
+    assert MANIFEST["icon"] == "./assets/icon.svg"
+    assert (PLUGIN / MANIFEST["icon"]).read_bytes() == SERVER_ICON.read_bytes()
 
 
 def test_the_plugin_launches_the_published_server_with_its_settings():

@@ -9,6 +9,7 @@
   "homepage": "https://github.com/jahirxtrap/eqinvoice",
   "repository": "https://github.com/jahirxtrap/eqinvoice",
   "license": "MIT",
+  "icon": "./assets/icon.svg",
   "keywords": ["mcp", "invoices", "ecuador", "sri"],
   "userConfig": {
     "book": {
