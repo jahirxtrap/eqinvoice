@@ -6,9 +6,11 @@ from copy import deepcopy
 from datetime import timedelta
 
 import pytest
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
+from cryptography.x509.oid import NameOID
 from lxml import etree
 
 from eqinvoice import (
@@ -21,9 +23,10 @@ from eqinvoice import (
     usable,
 )
 from eqinvoice.signature import C14N, DS, ETSI, RSA_SHA1, SIMULATED_SUBJECT
-from tests.builders import NOW, a_voucher, signed
+from tests.builders import FIXTURES, NOW, a_voucher, signed
 
 PASSWORD = "clave-de-prueba"
+TWO_KEYS_PASSWORD = "fixture-password"
 
 
 def _digest(element) -> str:
@@ -80,6 +83,39 @@ def test_it_uses_the_algorithms_the_sri_asks_for():
 def test_a_p12_opens_with_its_password_and_holds_its_own_certificate():
     opened = load_credential(a_p12(), PASSWORD)
     assert opened.certificate == simulated_credential().certificate
+
+
+def test_a_p12_with_a_key_to_encipher_first_signs_with_the_key_that_signs():
+    opened = read_credential(FIXTURES / "two-keys.p12", TWO_KEYS_PASSWORD)
+    usage = opened.certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+    assert usage.digital_signature and usage.content_commitment and not usage.key_encipherment
+    assert opened.certificate.public_key() == opened.key.public_key()
+    usable(opened, NOW)
+
+
+def test_a_p12_that_only_enciphers_says_so():
+    held = simulated_credential()
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Solo cifrado")])
+    enciphering = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(held.key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(NOW - timedelta(days=1))
+        .not_valid_after(NOW + timedelta(days=1))
+        .add_extension(
+            x509.KeyUsage(False, False, True, False, False, False, False, False, False),
+            critical=True,
+        )
+        .sign(held.key, hashes.SHA256())
+    )
+    data = pkcs12.serialize_key_and_certificates(
+        b"cifrado", held.key, enciphering, None, BestAvailableEncryption(PASSWORD.encode())
+    )
+    with pytest.raises(CredentialRefused) as refused:
+        load_credential(data, PASSWORD)
+    assert refused.value.problem == CredentialProblem.NOT_FOR_SIGNING
 
 
 def test_a_wrong_password_or_a_missing_file_say_which_it_was(tmp_path):

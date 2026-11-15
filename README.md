@@ -34,7 +34,7 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 
 - **Vouchers**: invoices (factura) and credit notes (nota de crédito), checked against the SRI's own XSD before they leave.
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
-- **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable or out of date.
+- **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable, out of date or not for signing. A .p12 holding a key to encipher besides the one to sign, as the Banco Central del Ecuador issues them, signs with the key whose certificate is for digital signature.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
 - **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime and RIMPE category, accounting duty, establishments and their trade names), and the issuer its vouchers name, with the legend of its regime.
 - **SRI catalogs**: the payment forms as `PaymentForm`, the IVA rates by their codes, and voucher numbers written as the SRI prints them.
@@ -135,7 +135,7 @@ if answer is not None and answer.authorized:
 
 - **`SriUnavailable`**: the SRI could not be reached or failed on its side. Nothing is lost: send the same document again later.
 - **`VoucherInvalid`**: the voucher breaks the SRI's schema (the message names every reason) or the record holds no voucher. Fix the data; sending it would only be returned.
-- **`CredentialRefused`**: the signature cannot sign. `problem` says why: `missing`, `unreadable` (wrong password or not a .p12) or `out_of_date`.
+- **`CredentialRefused`**: the signature cannot sign. `problem` says why: `missing`, `unreadable` (wrong password or not a .p12), `out_of_date` or `not_for_signing` (no certificate in it carries the digitalSignature key usage).
 - **Turned down**: `answer.authorized` is false and `answer.messages` carry the SRI's codes and texts, as it wrote them.
 
 </details>

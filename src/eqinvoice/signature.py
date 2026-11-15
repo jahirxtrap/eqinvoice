@@ -35,6 +35,9 @@ SIMULATED_YEARS = 10
 KEY_BITS = 2048
 PUBLIC_EXPONENT = 65537
 ID_DIGITS = 6
+LONG_FORM = 0x80
+PKCS7_DATA = bytes.fromhex("2a864886f70d010701")
+SHROUDED_KEY_BAG = bytes.fromhex("2a864886f70d010c0a0102")
 
 
 @dataclass(frozen=True)
@@ -63,7 +66,64 @@ def _matching(key: object, certificates: Sequence[x509.Certificate]) -> x509.Cer
     return None
 
 
+def _content(data: bytes) -> tuple[bytes, bytes]:
+    """The first DER element's content and whatever follows it."""
+    length, start = data[1], 2
+    if length & LONG_FORM:
+        count = length ^ LONG_FORM
+        if not count:
+            raise ValueError("indefinite lengths are BER, not DER")
+        length, start = int.from_bytes(data[start : start + count], "big"), start + count
+    return data[start : start + length], data[start + length :]
+
+
+def _elements(data: bytes) -> list[bytes]:
+    found = []
+    while data:
+        content, data = _content(data)
+        found.append(content)
+    return found
+
+
+def _wrapped(explicit: bytes) -> list[bytes]:
+    return _elements(_content(_content(explicit)[0])[0])
+
+
+def _shrouded_keys(data: bytes) -> list[bytes]:
+    """Every shrouded key in the plain safe contents; a BCE .p12 also has one to encipher."""
+    _, safe, *_ = _elements(_content(data)[0])
+    found = []
+    for info in _wrapped(_elements(safe)[1]):
+        kind, inner = _elements(info)
+        if kind == PKCS7_DATA:
+            found += [
+                value
+                for bag_id, value, *_ in (_elements(bag) for bag in _wrapped(inner))
+                if bag_id == SHROUDED_KEY_BAG
+            ]
+    return found
+
+
+def _keys(data: bytes, password: bytes, first: object) -> list[object]:
+    try:
+        held: list[object] = [
+            serialization.load_der_private_key(key, password) for key in _shrouded_keys(data)
+        ]
+    except (IndexError, ValueError):
+        return [first]
+    return held or [first]
+
+
+def _signs(certificate: x509.Certificate) -> bool:
+    try:
+        usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+    except x509.ExtensionNotFound:
+        return True
+    return usage.digital_signature
+
+
 def load_credential(data: bytes, password: str) -> Credential:
+    """The .p12's key whose certificate signs, past any key that only enciphers."""
     try:
         bundle = pkcs12.load_pkcs12(data, password.encode())
     except ValueError as unreadable:
@@ -72,12 +132,23 @@ def load_credential(data: bytes, password: str) -> Credential:
         ) from None
     candidates = [bundle.cert.certificate] if bundle.cert else []
     candidates += [extra.certificate for extra in bundle.additional_certs]
-    certificate = _matching(bundle.key, candidates)
-    if certificate is None or not isinstance(bundle.key, rsa.RSAPrivateKey):
+    pairs = [
+        (key, certificate)
+        for key in _keys(data, password.encode(), bundle.key)
+        if isinstance(key, rsa.RSAPrivateKey) and (certificate := _matching(key, candidates))
+    ]
+    if not pairs:
         raise CredentialRefused(
             CredentialProblem.UNREADABLE, "the .p12 holds no RSA key with its own certificate"
         )
-    return Credential(key=bundle.key, certificate=certificate)
+    signing = next(((key, held) for key, held in pairs if _signs(held)), None)
+    if signing is None:
+        raise CredentialRefused(
+            CredentialProblem.NOT_FOR_SIGNING,
+            "the .p12's certificates are not for digital signature (key usage digitalSignature)",
+        )
+    key, certificate = signing
+    return Credential(key=key, certificate=certificate)
 
 
 def read_credential(path: Path, password: str) -> Credential:
