@@ -1,2 +1,7 @@
-- Fixed signing with a .p12 from the Banco Central del Ecuador, which holds a key to encipher before the one to sign: vouchers were signed with the enciphering certificate and the SRI refused them with error 39, «el certificado utilizado no es del tipo firma digital». The signature now uses the key whose certificate is for digital signature
-- Added the `not_for_signing` problem, for a .p12 none of whose certificates can sign
+- Added debit notes, purchase settlements, remission guides and withholdings (comprobante de retención 2.0.0), built, signed, checked against the SRI's own schemas, read back and printed like invoices and credit notes
+- Added lotes: up to 50 signed vouchers sent at once under an access key of their own, with `authorize_batch` giving each one's authorization
+- Added `tax_on` and `withhold`, which work out IVA and retentions to the cent and check IVA retention codes against the SRI's table
+- Added foreign identifications (`BuyerKind.FOREIGN`) and the party's address on invoices and purchase settlements
+- Added the MCP tools `draft_debit_note`, `draft_purchase_settlement`, `draft_remission_guide` and `draft_withholding`; `register_client` keeps suppliers, carriers and withheld parties, with an address or a foreign identification
+- Changed `period_sales` so debit notes add to a period's sales, and anything that is no sale stays out
+- Drafts kept by 1.1 still read and issue

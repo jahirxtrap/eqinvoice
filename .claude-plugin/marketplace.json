@@ -1,6 +1,6 @@
 {
   "name": "eqinvoice",
-  "description": "EQinvoice by jahirtrap: electronic invoices and credit notes for Ecuador's SRI, as a Claude Code plugin.",
+  "description": "EQinvoice by jahirtrap: every electronic voucher of Ecuador's SRI, as a Claude Code plugin.",
   "owner": {
     "name": "jahirtrap",
     "url": "https://github.com/jahirxtrap"
@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "eqinvoice",
-      "description": "Electronic invoices and credit notes for Ecuador's SRI: clients looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
-      "version": "1.1.5",
+      "description": "Every electronic voucher of Ecuador's SRI, from invoices and credit or debit notes to purchase settlements, remission guides and withholdings: parties looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
+      "version": "1.2.0",
       "source": "./plugin",
       "category": "Productivity",
       "tags": ["mcp", "invoices", "ecuador", "sri"]
