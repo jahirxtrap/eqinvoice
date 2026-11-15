@@ -18,6 +18,7 @@ from eqinvoice import (
     CredentialRefused,
     Environment,
     Line,
+    PaymentForm,
     SriRegistry,
     SriUnavailable,
     SriWebServices,
@@ -48,7 +49,7 @@ INSTRUCTIONS = (
 )
 DEFAULT_ESTABLISHMENT = "001"
 DEFAULT_POINT = "001"
-DEFAULT_PAYMENT_FORM = "20"
+DEFAULT_PAYMENT_FORM = PaymentForm.WITH_FINANCIAL_SYSTEM
 ANTICIPATED = (
     Refused,
     NotInBook,
@@ -232,7 +233,7 @@ def draft_invoice(
     client: Annotated[str, Field(description="The identification of a client in the book")],
     lines: list[LineRequest],
     payment_form: Annotated[
-        str, Field(description=f"The SRI's payment form code: {PAYMENT_CHOICES}")
+        PaymentForm, Field(description=f"The SRI's payment form code: {PAYMENT_CHOICES}")
     ] = DEFAULT_PAYMENT_FORM,
 ) -> Previewed:
     """An invoice drafted for a client, with the voucher it would become and its printed preview."""

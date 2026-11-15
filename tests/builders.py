@@ -15,6 +15,7 @@ from eqinvoice import (
     Line,
     Modified,
     Payment,
+    PaymentForm,
     SimulatedSri,
     Taxpayer,
     Voucher,
@@ -30,6 +31,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 NOW = datetime.now(UTC)
 RUC = "1790011223001"
 ISSUED_ON = date(2026, 10, 27)
+CASH = PaymentForm.WITHOUT_FINANCIAL_SYSTEM
+TRANSFER = PaymentForm.WITH_FINANCIAL_SYSTEM
 LOGO = MarkLogo(
     mark=FIXTURES / "mark.svg",
     name=FIXTURES / "name.svg",
@@ -108,7 +111,7 @@ def a_voucher(kind: VoucherKind = VoucherKind.INVOICE, **overrides: Any) -> Vouc
         "issued_on": ISSUED_ON,
         "buyer": Buyer(BuyerKind.CEDULA, "1104680135", "Ana Perez & Hijos", "ana@example.com"),
         "lines": (a_line(), UNTAXED),
-        "payments": (Payment("01", Decimal("10.00")), Payment("20", Decimal("3.30"))),
+        "payments": (Payment(CASH, Decimal("10.00")), Payment(TRANSFER, Decimal("3.30"))),
     }
     if kind == VoucherKind.CREDIT_NOTE:
         fields["modified"] = Modified("001-001-000000003", date(2026, 10, 20), "Devolucion")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 from datetime import date, datetime
 
-from eqinvoice.model import Environment, VoucherKind
+from eqinvoice.model import Environment, VoucherKind, sequential_code
 from eqinvoice.protocol import (
     CLOCK,
     DOCUMENT_CODES,
@@ -37,7 +37,7 @@ def access_key(
     numeric = f"{secrets.randbelow(10**NUMERIC_CODE_DIGITS):0{NUMERIC_CODE_DIGITS}d}"
     body = (
         f"{issued_on:%d%m%Y}{DOCUMENT_CODES[kind]}{ruc}{ENVIRONMENT_CODES[environment]}"
-        f"{establishment}{point}{sequential:09d}{numeric}{NORMAL_EMISSION}"
+        f"{establishment}{point}{sequential_code(sequential)}{numeric}{NORMAL_EMISSION}"
     )
     return body + check_digit(body)
 

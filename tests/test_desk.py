@@ -29,7 +29,7 @@ from eqinvoice import (
 from eqinvoice_mcp.book import Book, NotInBook
 from eqinvoice_mcp.desk import Desk, Refused
 from eqinvoice_mcp.model import Standing
-from tests.builders import NOW, RUC, a_taxpayer
+from tests.builders import NOW, RUC, TRANSFER, a_taxpayer
 
 CLIENT_RUC = "1790011224001"
 SERVICE = price_line("DEV", "Desarrollo de software", Decimal("1"), Decimal("500"), "4")
@@ -127,10 +127,10 @@ def test_a_ruc_client_is_named_by_the_registry_and_any_other_by_hand(tmp_path):
 
 
 def test_a_draft_comes_with_the_voucher_it_would_be_and_a_printed_preview(tmp_path):
-    previewed = a_configured_desk(tmp_path).draft_invoice(CLIENT_RUC, (SERVICE,), "20")
+    previewed = a_configured_desk(tmp_path).draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER)
     voucher = previewed.voucher
     assert voucher.number == "001-100-000000001" and voucher.total == Decimal("575.00")
-    assert voucher.payments == (Payment("20", Decimal("575.00")),)
+    assert voucher.payments == (Payment(TRANSFER, Decimal("575.00")),)
     assert voucher.buyer.email == "pagos@cliente.ec"
     assert previewed.preview.read_bytes().startswith(b"%PDF")
 
@@ -138,15 +138,15 @@ def test_a_draft_comes_with_the_voucher_it_would_be_and_a_printed_preview(tmp_pa
 def test_a_draft_needs_a_line_and_a_client_in_the_book(tmp_path):
     desk = a_configured_desk(tmp_path)
     with pytest.raises(Refused):
-        desk.draft_invoice(CLIENT_RUC, (), "20")
+        desk.draft_invoice(CLIENT_RUC, (), TRANSFER)
     with pytest.raises(NotInBook):
-        desk.draft_invoice("0999999999", (SERVICE,), "20")
+        desk.draft_invoice("0999999999", (SERVICE,), TRANSFER)
 
 
 def test_issuing_numbers_signs_and_files_each_voucher_once_authorized(tmp_path):
     desk = a_configured_desk(tmp_path)
-    first = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
-    second = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    first = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
+    second = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     assert first.standing == second.standing == Standing.AUTHORIZED
     assert (first.voucher.number, second.voucher.number) == (
         "001-100-000000001",
@@ -162,14 +162,14 @@ def test_issuing_numbers_signs_and_files_each_voucher_once_authorized(tmp_path):
 
 def test_a_voucher_the_sri_returns_is_filed_as_refused_with_its_reasons(tmp_path):
     desk = a_configured_desk(tmp_path, Returning())
-    filed = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    filed = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     assert filed.standing == Standing.REFUSED and filed.messages == (RETURNED,)
     assert desk.check(filed.voucher.number) == filed
 
 
 def test_an_unreachable_sri_leaves_the_voucher_pending_until_it_is_checked(tmp_path):
     desk = a_configured_desk(tmp_path, Unreachable())
-    draft = desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft
+    draft = desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft
     with pytest.raises(SriUnavailable, match="001-100-000000001 is filed as pending"):
         desk.issue(draft.identifier)
     assert desk.vouchers()[0].standing == Standing.PENDING
@@ -179,7 +179,7 @@ def test_an_unreachable_sri_leaves_the_voucher_pending_until_it_is_checked(tmp_p
 
 def test_a_signature_that_cannot_sign_gives_its_number_back(tmp_path):
     a_configured_desk(tmp_path)
-    draft = a_desk(tmp_path).draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft
+    draft = a_desk(tmp_path).draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft
     late = a_desk(tmp_path, clock=lambda: NOW + timedelta(days=365 * 20))
     with pytest.raises(CredentialRefused):
         late.issue(draft.identifier)
@@ -188,7 +188,7 @@ def test_a_signature_that_cannot_sign_gives_its_number_back(tmp_path):
 
 def test_a_credit_note_offsets_an_authorized_invoice_and_never_exceeds_it(tmp_path):
     desk = a_configured_desk(tmp_path)
-    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     number = invoice.voucher.number
     whole = desk.draft_credit_note(number, "Devolucion")
     assert whole.voucher.kind == VoucherKind.CREDIT_NOTE and whole.voucher.payments == ()
@@ -205,12 +205,12 @@ def test_a_credit_note_offsets_an_authorized_invoice_and_never_exceeds_it(tmp_pa
 
 def test_the_sales_add_up_what_the_sri_authorized_and_list_what_awaits_it(tmp_path):
     desk = a_configured_desk(tmp_path)
-    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    invoice = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     desk.issue(desk.draft_credit_note(invoice.voucher.number, "Devolucion").draft.identifier)
-    desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     late = a_desk(tmp_path, Unreachable())
     with pytest.raises(SriUnavailable):
-        late.issue(late.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+        late.issue(late.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     day = invoice.voucher.issued_on
     report = desk.sales(day, day)
     assert (report.sales.invoices, report.sales.credit_notes) == (2, 1)
@@ -223,6 +223,6 @@ def test_the_sales_add_up_what_the_sri_authorized_and_list_what_awaits_it(tmp_pa
 
 def test_a_credit_note_needs_an_invoice_the_sri_authorized(tmp_path):
     desk = a_configured_desk(tmp_path, Returning())
-    refused = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), "20").draft.identifier)
+    refused = desk.issue(desk.draft_invoice(CLIENT_RUC, (SERVICE,), TRANSFER).draft.identifier)
     with pytest.raises(Refused):
         desk.draft_credit_note(refused.voucher.number, "Devolucion")

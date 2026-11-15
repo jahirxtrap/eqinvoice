@@ -6,7 +6,7 @@ from functools import cache
 from lxml import etree
 
 from eqinvoice.errors import VoucherInvalid
-from eqinvoice.model import ZERO, Issuer, Voucher, VoucherKind
+from eqinvoice.model import ZERO, Issuer, Voucher, VoucherKind, sequential_code
 from eqinvoice.protocol import (
     BUYER_CODES,
     CODE_TAGS,
@@ -20,6 +20,7 @@ from eqinvoice.protocol import (
     NO,
     NORMAL_EMISSION,
     PARSER,
+    POPULAR_BUSINESS_LEGEND,
     RIMPE_TYPE,
     ROOTS,
     SCHEMA_DIR,
@@ -65,11 +66,10 @@ def _info_tributaria(root: etree._Element, voucher: Voucher, issuer: Issuer) -> 
     _add(info, "codDoc", DOCUMENT_CODES[voucher.kind])
     _add(info, "estab", voucher.establishment)
     _add(info, "ptoEmi", voucher.point)
-    _add(info, "secuencial", f"{voucher.sequential:09d}")
+    _add(info, "secuencial", sequential_code(voucher.sequential))
     _add(info, "dirMatriz", issuer.head_office_address)
     _optional(info, "agenteRetencion", issuer.withholding_agent)
-    if issuer.rimpe:
-        _add(info, RIMPE_TYPE, rimpe_legend())
+    _optional(info, RIMPE_TYPE, issuer_legend(issuer))
 
 
 def _buyer(info: etree._Element, voucher: Voucher) -> None:
@@ -182,19 +182,33 @@ def _schema_document(kind: VoucherKind) -> etree._ElementTree:
     return etree.parse(str(SCHEMA_DIR / SCHEMAS[kind]), PARSER)
 
 
+def _legend_rule(document: etree._ElementTree) -> etree._Element | None:
+    return document.find(f"{{{XSD_NS}}}simpleType[@name='{RIMPE_TYPE}']/{{{XSD_NS}}}restriction")
+
+
 @cache
 def _schema(kind: VoucherKind) -> etree.XMLSchema:
-    return etree.XMLSchema(_schema_document(kind))
+    """The SRI's schema, also admitting the popular business legend its ficha técnica requires."""
+    document = _schema_document(kind)
+    rule = _legend_rule(document)
+    if rule is not None:
+        etree.SubElement(rule, f"{{{XSD_NS}}}pattern", value=POPULAR_BUSINESS_LEGEND)
+    return etree.XMLSchema(document)
 
 
 @cache
 def rimpe_legend() -> str:
-    pattern = _schema_document(VoucherKind.INVOICE).find(
-        f"{{{XSD_NS}}}simpleType[@name='{RIMPE_TYPE}']/{{{XSD_NS}}}restriction/{{{XSD_NS}}}pattern"
-    )
+    rule = _legend_rule(_schema_document(VoucherKind.INVOICE))
+    pattern = None if rule is None else rule.find(f"{{{XSD_NS}}}pattern")
     if pattern is None:
         raise VoucherInvalid("The SRI's schema no longer fixes the RIMPE legend")
     return str(pattern.get("value"))
+
+
+def issuer_legend(issuer: Issuer) -> str | None:
+    if issuer.popular_business:
+        return POPULAR_BUSINESS_LEGEND
+    return rimpe_legend() if issuer.rimpe else None
 
 
 def validate(kind: VoucherKind, document: bytes) -> None:

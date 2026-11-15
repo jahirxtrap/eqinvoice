@@ -29,12 +29,13 @@ The library never imports the MCP package; the MCP package only uses the library
 
 ```
 src/eqinvoice/
-  model.py        the voucher in the SRI's terms; totals, tax groups and payment forms derive here
+  model.py        the voucher in the SRI's terms, PaymentForm and voucher_number; totals, tax
+                  groups and payment forms derive here
   protocol.py     every SRI code, rate, name, namespace and address, the XML parser and text_at
   access_key.py   the 49-digit access key and the issue date on the SRI's clock
   pricing.py      price_line: a line's subtotal and IVA to the cent
   sales.py        period_sales: a period's vouchers per IVA rate, as the IVA declaration asks
-  document.py     the XML builder, the XSD check and the RIMPE legend
+  document.py     the XML builder, the XSD check and the RIMPE legends (issuer_legend)
   signature.py    the .p12 credential and the XAdES-BES signature
   service.py      the SRI's reception and authorization web services, and SimulatedSri
   registry.py     the SRI's taxpayer registry, SimulatedRegistry and Taxpayer.issuer()
@@ -47,7 +48,7 @@ src/eqinvoice_mcp/
   settings.py     the only reader of the environment: EQINVOICE_BOOK, EQINVOICE_P12, its password
   book.py         the only module that touches disk: the book's files and the numbering
   desk.py         the decisions: issuer, clients, drafts with their preview, issuing, checking
-  model.py        Profile, Draft, Previewed, Filed, Standing
+  model.py        Profile, Draft, Previewed, Filed, Standing, SalesReport
   server.py       the tools, their hints, and anticipated failures turned into ToolError
   icon.svg        the server's icon
 plugin/           .claude-plugin/plugin.json (with its userConfig) and .mcp.json (uvx from PyPI)
@@ -91,12 +92,14 @@ scripts in `scripts/`.
    cannot say it (a contract, a unit, a behaviour that is not obvious), never on a module and never
    to repeat a name. The MCP tools keep theirs: they are the descriptions the client reads.
 3. **One home per fact.**
-   - An SRI code, rate or name lives in `protocol.py`.
+   - An SRI code, rate or name lives in `protocol.py`; the payment table is `PaymentForm` in
+     `model.py`, whose values are the SRI's codes.
+   - A voucher's number is written by `voucher_number`, and its sequential by `sequential_code`.
    - A total is derived in `model.py` (`subtotal`, `vat`, `total`, `tax_groups`, `payment_forms`),
      and the XML, the RIDE and the MCP read it from there.
    - The printed words live in `labels/`, and the MCP's tool descriptions read them too.
-   - What the SRI's registry holds (a legal name, an address, the accounting duty) is looked up,
-     never typed in.
+   - What the SRI's registry holds (a legal name, an address, the accounting duty, the regime and
+     its RIMPE category, a trade name) is looked up, never typed in.
 4. **The library reads no configuration.** The caller passes the environment, the credential,
    the timeout and the logo. Only `eqinvoice_mcp/settings.py` reads environment variables.
 5. **Fail with a reason.** Every failure raises one of the errors in `errors.py` (or the desk's
@@ -108,7 +111,9 @@ scripts in `scripts/`.
    approval first. A number is taken for good once signed, per environment, kind, establishment
    and point.
 7. **The schemas are the SRI's.** Never edit the XSDs. A new schema version is a new file and a
-   new entry in `SCHEMAS`.
+   new entry in `SCHEMAS`. Where the SRI's ficha técnica asks for more than its published XSD,
+   the check adds it in memory (`_schema` admits the popular business legend of annex 22), and
+   the files stay as published.
 8. **No secrets and no real taxpayers in the repo.** Tests use made-up RUCs, signatures are
    simulated, and the live scripts take the .p12 from the environment.
 

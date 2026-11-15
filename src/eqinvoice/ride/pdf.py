@@ -15,7 +15,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Flowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from eqinvoice.document import money, rimpe_legend
+from eqinvoice.document import issuer_legend, money
 from eqinvoice.model import Issued, Modified, VoucherKind
 from eqinvoice.protocol import (
     CLOCK,
@@ -185,8 +185,8 @@ def _issuer_rows(issued: Issued, words: Labels) -> list[list[Any]]:
     rows.append([_field(words["keepsAccounts"], _keeps_accounts(issued, words))])
     if issuer.withholding_agent:
         rows.append([_field(words["withholdingAgent"], issuer.withholding_agent)])
-    if issuer.rimpe:
-        rows.append([_text(rimpe_legend(), bold=True)])
+    if legend := issuer_legend(issuer):
+        rows.append([_text(legend, bold=True)])
     return rows
 
 
@@ -438,8 +438,8 @@ def _ticket_issuer(issued: Issued, words: Labels, logo: Logo | None) -> list[Flo
         flow.append(_field(words["specialTaxpayer"], issuer.special_taxpayer))
     if issuer.withholding_agent:
         flow.append(_field(words["withholdingAgent"], issuer.withholding_agent))
-    if issuer.rimpe:
-        flow.append(_text(rimpe_legend(), bold=True))
+    if legend := issuer_legend(issuer):
+        flow.append(_text(legend, bold=True))
     return flow
 
 

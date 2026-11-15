@@ -12,6 +12,7 @@ from eqinvoice import (
     Line,
     Message,
     Modified,
+    PaymentForm,
     PeriodSales,
     Voucher,
     VoucherKind,
@@ -47,7 +48,7 @@ class Draft:
     kind: VoucherKind
     buyer: Buyer
     lines: tuple[Line, ...]
-    payment_form: str | None
+    payment_form: PaymentForm | None
     modified: Modified | None
     created_at: datetime
 
@@ -77,7 +78,5 @@ class PendingVoucher:
 
 @dataclass(frozen=True)
 class SalesReport:
-    """The period's authorized sales; its vouchers still awaiting the SRI are listed, not added."""
-
     sales: PeriodSales
     pending: tuple[PendingVoucher, ...]

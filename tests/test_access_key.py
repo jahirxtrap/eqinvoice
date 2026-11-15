@@ -2,10 +2,21 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from eqinvoice import Environment, VoucherKind, access_key, check_digit, issue_date
+from eqinvoice import (
+    Environment,
+    VoucherKind,
+    access_key,
+    check_digit,
+    issue_date,
+    voucher_number,
+)
 from tests.builders import RUC
 
 SRI_SAMPLE_KEY = "0503201201176001321000110010030009900641234567814"
+
+
+def test_a_number_is_written_as_the_sri_prints_it():
+    assert voucher_number("001", "002", 15) == "001-002-000000015"
 
 
 def test_the_check_digit_is_the_one_the_sri_prints_in_its_own_example():

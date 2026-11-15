@@ -8,7 +8,15 @@ from typing import TypeVar
 
 from pydantic import TypeAdapter
 
-from eqinvoice import Buyer, Environment, Message, Voucher, VoucherKind, read_voucher
+from eqinvoice import (
+    Buyer,
+    Environment,
+    Message,
+    Voucher,
+    VoucherKind,
+    read_voucher,
+    voucher_number,
+)
 from eqinvoice.ride import ImageLogo, Logo, MarkLogo
 from eqinvoice_mcp.model import Draft, Filed, Lockup, Profile, Standing
 
@@ -140,7 +148,7 @@ class Book:
     ) -> int:
         """The next sequential, taken for good by creating its folder."""
         sequential = self.next_sequential(environment, kind, establishment, point)
-        folder = self._shelf(environment, kind) / f"{establishment}-{point}-{sequential:09d}"
+        folder = self._shelf(environment, kind) / voucher_number(establishment, point, sequential)
         folder.parent.mkdir(parents=True, exist_ok=True)
         try:
             folder.mkdir()

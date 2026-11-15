@@ -16,6 +16,7 @@ from eqinvoice.model import (
     Line,
     Modified,
     Payment,
+    PaymentForm,
     Voucher,
     VoucherKind,
 )
@@ -29,6 +30,7 @@ from eqinvoice.protocol import (
     INFO,
     IRBPNR_TAX,
     PARSER,
+    POPULAR_BUSINESS_LEGEND,
     RIMPE_TYPE,
     ROOTS,
     SYSTEM_PROVIDER_FIELD,
@@ -87,9 +89,16 @@ def _tax(info: etree._Element, code: str) -> Decimal:
     )
 
 
+def _payment_form(code: str) -> PaymentForm:
+    try:
+        return PaymentForm(code)
+    except ValueError:
+        raise VoucherInvalid(f"{code} is no payment form of the SRI's table") from None
+
+
 def _payments(info: etree._Element) -> tuple[Payment, ...]:
     return tuple(
-        Payment(form=_text(paid, "formaPago"), amount=_decimal(paid, "total"))
+        Payment(form=_payment_form(_text(paid, "formaPago")), amount=_decimal(paid, "total"))
         for paid in info.iterfind("pagos/pago")
     )
 
@@ -171,6 +180,7 @@ def read(record: str) -> Issued:
         withholding_agent=_text(tributaria, "agenteRetencion") or None,
         rimpe=bool(_text(tributaria, RIMPE_TYPE)),
         system_provider_ruc=extra.get(SYSTEM_PROVIDER_FIELD),
+        popular_business=_text(tributaria, RIMPE_TYPE) == POPULAR_BUSINESS_LEGEND,
     )
     return Issued(
         voucher=voucher,

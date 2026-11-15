@@ -15,6 +15,7 @@ from eqinvoice import (
     Issuer,
     Line,
     Payment,
+    PaymentForm,
     SriWebServices,
     Voucher,
     VoucherKind,
@@ -69,7 +70,7 @@ def _voucher(setup: dict[str, str], issuer: Issuer, now: datetime) -> Voucher:
                 rate_percentage=Decimal("15.00"),
             ),
         ),
-        payments=(Payment("01", Decimal("1.15")),),
+        payments=(Payment(PaymentForm.WITHOUT_FINANCIAL_SYSTEM, Decimal("1.15")),),
     )
 
 

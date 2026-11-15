@@ -11,6 +11,7 @@ from eqinvoice.protocol import (
     ACTIVE_TAXPAYER,
     ESTABLISHMENTS_PATH,
     OPEN_ESTABLISHMENT,
+    POPULAR_BUSINESS,
     REGISTRY_HEADERS,
     REGISTRY_HOST,
     RIMPE_REGIME,
@@ -43,6 +44,7 @@ class Taxpayer:
     special_taxpayer: bool
     activity: str
     establishments: tuple[Establishment, ...]
+    category: str = ""
 
     def establishment(self, number: str) -> Establishment | None:
         return next((held for held in self.establishments if held.number == number), None)
@@ -80,6 +82,7 @@ class Taxpayer:
             withholding_agent=withholding_agent,
             rimpe=self.regime == RIMPE_REGIME,
             system_provider_ruc=system_provider_ruc,
+            popular_business=self.category == POPULAR_BUSINESS,
         )
 
 
@@ -108,6 +111,7 @@ def _taxpayer(held: dict[str, Any], listed: list[dict[str, Any]]) -> Taxpayer:
         special_taxpayer=held.get("contribuyenteEspecial") == YES,
         activity=str(held.get("actividadEconomicaPrincipal") or ""),
         establishments=tuple(_establishment(each) for each in listed),
+        category=str(held.get("categoria") or ""),
     )
 
 

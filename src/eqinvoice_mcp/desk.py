@@ -14,6 +14,7 @@ from eqinvoice import (
     Line,
     Modified,
     Payment,
+    PaymentForm,
     Registry,
     SimulatedSri,
     Sri,
@@ -187,7 +188,7 @@ class Desk:
         kind: VoucherKind,
         buyer: Buyer,
         lines: Sequence[Line],
-        payment_form: str | None,
+        payment_form: PaymentForm | None,
         modified: Modified | None,
     ) -> Previewed:
         if not lines:
@@ -207,7 +208,9 @@ class Desk:
         self._book.keep_draft(draft, self._printed(voucher, profile, now))
         return Previewed(draft, voucher, self._book.preview(draft.identifier))
 
-    def draft_invoice(self, client: str, lines: Sequence[Line], payment_form: str) -> Previewed:
+    def draft_invoice(
+        self, client: str, lines: Sequence[Line], payment_form: PaymentForm
+    ) -> Previewed:
         buyer = self._book.client(client)
         return self._draft(VoucherKind.INVOICE, buyer, lines, payment_form, None)
 

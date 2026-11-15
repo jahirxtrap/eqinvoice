@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import httpx
 import pytest
 
@@ -60,6 +62,18 @@ def test_a_ruc_reads_as_the_taxpayer_with_its_establishments():
     assert "Mozilla" in asked[0].headers["User-Agent"]
 
 
+def test_a_popular_business_reads_its_category():
+    popular = [{**HELD[0], "regimen": "RIMPE", "categoria": "NEGOCIO POPULAR"}]
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=popular if request.url.path == TAXPAYER_PATH else LISTED)
+
+    taxpayer = registry(httpx.MockTransport(answer)).find(RUC)
+    assert taxpayer is not None and taxpayer.category == "NEGOCIO POPULAR"
+    assert taxpayer.issuer().popular_business
+    assert registry().find(RUC) == replace(taxpayer, regime="GENERAL", category="")
+
+
 def test_a_ruc_nobody_holds_is_none():
     empty = httpx.MockTransport(lambda request: httpx.Response(204))
     assert registry(empty).find(RUC) is None
@@ -87,6 +101,9 @@ def test_the_taxpayer_issues_from_its_head_office():
     assert issuer.head_office_address == "LOJA / LOJA / SUCRE / AV. UNIVERSITARIA 10-20"
     assert issuer.keeps_accounts and not issuer.rimpe
     assert a_taxpayer(regime="RIMPE").issuer().rimpe
+    popular = a_taxpayer(regime="RIMPE", category="NEGOCIO POPULAR").issuer()
+    assert popular.rimpe and popular.popular_business
+    assert not a_taxpayer(regime="RIMPE", category="EMPRENDEDOR").issuer().popular_business
 
 
 def test_a_withholding_agent_or_special_taxpayer_brings_its_number():

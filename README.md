@@ -36,7 +36,8 @@ Python 3.11 or newer. In Claude Code, the [plugin](https://github.com/jahirxtrap
 - **Access key**: the 49-digit clave de acceso with its modulo 11 check digit, and the issue date on the SRI's clock.
 - **Signature**: XAdES-BES with the issuer's .p12 and its password, refused with a reason when it is missing, unreadable or out of date.
 - **SRI web services**: reception and authorization, in the test environment (celcer) or in production (cel).
-- **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime, accounting duty, establishments), and the issuer its vouchers name.
+- **Taxpayer registry**: a RUC looked up in the SRI's public registry (legal name, standing, regime and RIMPE category, accounting duty, establishments and their trade names), and the issuer its vouchers name, with the legend of its regime.
+- **SRI catalogs**: the payment forms as `PaymentForm`, the IVA rates by their codes, and voucher numbers written as the SRI prints them.
 - **Priced lines**: a line's subtotal and IVA worked out to the cent from its quantity, unit price, discount and the SRI's rate code.
 - **Period sales**: the vouchers of a month, or any period, added up per IVA rate as the IVA declaration asks for them, credit notes offsetting the invoices.
 - **Printed copy (RIDE)**: an A4 page or an 80 mm strip, with the SRI's full block of totals and the access key as a barcode (page) or a QR code (strip).
@@ -59,6 +60,7 @@ from eqinvoice import (
     Environment,
     Issuer,
     Payment,
+    PaymentForm,
     SriWebServices,
     Voucher,
     VoucherKind,
@@ -94,7 +96,7 @@ voucher = Voucher(
     issued_on=issued_on,
     buyer=Buyer(BuyerKind.CEDULA, "1710034065", "Ana Perez", "ana@example.com"),
     lines=(line,),
-    payments=(Payment("01", Decimal("11.50")),),
+    payments=(Payment(PaymentForm.WITHOUT_FINANCIAL_SYSTEM, Decimal("11.50")),),
 )
 
 document = sign_voucher(voucher, issuer, credential, now)
@@ -120,9 +122,11 @@ if answer is not None and answer.authorized:
 
 - **Lines**: `subtotal` is the line before IVA (quantity times unit price minus discount) and `vat` its tax, both to two decimals. `price_line(code, description, quantity, unit_price, rate_code, discount)` works them out, rounding halves up. The voucher adds them up per rate.
 - **IVA rate codes** (`rate_code`): the SRI's table, for example `"4"` for 15 %, `"0"` for 0 %, `"6"` not subject to IVA, `"7"` exempt.
-- **Payment forms** (`Payment.form`): the SRI's table, for example `"01"` without the financial system (cash), `"16"` debit card, `"19"` credit card, `"20"` other with the financial system (transfer). Payments of the same form are added up.
+- **Payment forms** (`Payment.form`): a `PaymentForm`, the SRI's table by its codes: `WITHOUT_FINANCIAL_SYSTEM` (`"01"`, cash), `DEBT_COMPENSATION` (`"15"`), `DEBIT_CARD` (`"16"`), `ELECTRONIC_MONEY` (`"17"`), `PREPAID_CARD` (`"18"`), `CREDIT_CARD` (`"19"`), `WITH_FINANCIAL_SYSTEM` (`"20"`, transfer) and `ENDORSED_SECURITIES` (`"21"`). Payments of the same form are added up, and a record with a code outside the table is refused.
+- **Numbers**: `voucher_number(establishment, point, sequential)` writes a voucher's number as the SRI prints it, `001-002-000000015`, the same `Voucher.number` gives.
 - **Credit notes**: `modified=Modified(number, issued_on, reason)` names the invoice they correct; credit notes carry no payments.
 - **Final consumer**: `Buyer(BuyerKind.FINAL_CONSUMER)`. The voucher writes the SRI's own name and number for it.
+- **RIMPE**: an issuer in the RIMPE carries its legend, `CONTRIBUYENTE RÉGIMEN RIMPE` as an entrepreneur (`rimpe=True`) or `CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE` as a popular business (`popular_business=True`); `Taxpayer.issuer()` sets both from the registry. The SRI's published schema only admits the first legend, so the check before sending also admits the second, as its ficha técnica (2.34, annex 22) requires.
 
 </details>
 

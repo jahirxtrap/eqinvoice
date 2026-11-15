@@ -11,8 +11,6 @@ from eqinvoice.model import ZERO, Voucher, VoucherKind
 
 @dataclass(frozen=True)
 class RateSales:
-    """One IVA rate in a period: the invoiced base, that base less credit notes, and its IVA."""
-
     code: str
     rate: Decimal
     gross: Decimal
@@ -38,7 +36,6 @@ def issued_between(vouchers: Iterable[Voucher], since: date, until: date) -> tup
 
 
 def period_sales(vouchers: Iterable[Voucher], since: date, until: date) -> PeriodSales:
-    """The vouchers of a period added up per IVA rate, with its credit notes offsetting them."""
     held = issued_between(vouchers, since, until)
     rates: dict[str, RateSales] = {}
     for voucher in held:

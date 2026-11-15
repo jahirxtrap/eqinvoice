@@ -5,7 +5,22 @@ from decimal import Decimal
 import pytest
 
 from eqinvoice import Payment, VoucherInvalid, VoucherKind, read, read_voucher
-from tests.builders import RUC, a_voucher, authorized, signed
+from tests.builders import CASH, RUC, TRANSFER, a_voucher, an_issuer, authorized, signed
+
+
+def test_a_payment_form_the_sri_does_not_list_is_refused():
+    document = signed(a_voucher()).replace(
+        b"<formaPago>01</formaPago>", b"<formaPago>05</formaPago>"
+    )
+    with pytest.raises(VoucherInvalid):
+        read_voucher(document)
+
+
+def test_the_record_reads_back_whether_its_issuer_is_a_popular_business():
+    popular = read(authorized(a_voucher(), an_issuer(rimpe=True, popular_business=True))).issuer
+    assert popular.rimpe and popular.popular_business
+    entrepreneur = read(authorized(a_voucher(), an_issuer(rimpe=True))).issuer
+    assert entrepreneur.rimpe and not entrepreneur.popular_business
 
 
 def test_the_record_reads_back_as_the_voucher_it_holds():
@@ -15,8 +30,8 @@ def test_the_record_reads_back_as_the_voucher_it_holds():
     assert issued.voucher.buyer == voucher.buyer
     assert issued.voucher.lines == voucher.lines
     assert issued.voucher.payments == (
-        Payment("01", Decimal("10.00")),
-        Payment("20", Decimal("3.30")),
+        Payment(CASH, Decimal("10.00")),
+        Payment(TRANSFER, Decimal("3.30")),
     )
     assert issued.issuer.ruc == RUC and issued.issuer.system_provider_ruc == RUC
     assert issued.authorization_number == voucher.access_key

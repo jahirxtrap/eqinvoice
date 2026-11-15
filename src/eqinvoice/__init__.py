@@ -1,5 +1,5 @@
 from eqinvoice.access_key import access_key, check_digit, issue_date
-from eqinvoice.document import build, rimpe_legend, validate
+from eqinvoice.document import build, issuer_legend, rimpe_legend, validate
 from eqinvoice.errors import (
     CredentialProblem,
     CredentialRefused,
@@ -15,9 +15,11 @@ from eqinvoice.model import (
     Line,
     Modified,
     Payment,
+    PaymentForm,
     TaxGroup,
     Voucher,
     VoucherKind,
+    voucher_number,
 )
 from eqinvoice.pricing import cents, price_line
 from eqinvoice.record import read, read_voucher
@@ -64,6 +66,7 @@ __all__ = [
     "Message",
     "Modified",
     "Payment",
+    "PaymentForm",
     "PeriodSales",
     "RateSales",
     "Reception",
@@ -87,6 +90,7 @@ __all__ = [
     "details",
     "issue_date",
     "issued_between",
+    "issuer_legend",
     "load_credential",
     "period_sales",
     "price_line",
@@ -99,4 +103,5 @@ __all__ = [
     "simulated_credential",
     "usable",
     "validate",
+    "voucher_number",
 ]

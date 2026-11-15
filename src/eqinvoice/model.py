@@ -25,6 +25,25 @@ class BuyerKind(StrEnum):
     FINAL_CONSUMER = "final_consumer"
 
 
+class PaymentForm(StrEnum):
+    WITHOUT_FINANCIAL_SYSTEM = "01"
+    DEBT_COMPENSATION = "15"
+    DEBIT_CARD = "16"
+    ELECTRONIC_MONEY = "17"
+    PREPAID_CARD = "18"
+    CREDIT_CARD = "19"
+    WITH_FINANCIAL_SYSTEM = "20"
+    ENDORSED_SECURITIES = "21"
+
+
+def sequential_code(sequential: int) -> str:
+    return f"{sequential:09d}"
+
+
+def voucher_number(establishment: str, point: str, sequential: int) -> str:
+    return f"{establishment}-{point}-{sequential_code(sequential)}"
+
+
 @dataclass(frozen=True)
 class Issuer:
     legal_name: str
@@ -36,6 +55,7 @@ class Issuer:
     withholding_agent: str | None = None
     rimpe: bool = False
     system_provider_ruc: str | None = None
+    popular_business: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,9 +85,9 @@ class Line:
 
 @dataclass(frozen=True)
 class Payment:
-    """Part of what an invoice was paid with: the SRI's payment form code and the amount."""
+    """Part of what an invoice was paid with: the SRI's payment form and the amount."""
 
-    form: str
+    form: PaymentForm
     amount: Decimal
 
 
@@ -104,7 +124,7 @@ class Voucher:
 
     @property
     def number(self) -> str:
-        return f"{self.establishment}-{self.point}-{self.sequential:09d}"
+        return voucher_number(self.establishment, self.point, self.sequential)
 
     @property
     def subtotal(self) -> Decimal:
@@ -137,7 +157,7 @@ class Voucher:
     @property
     def payment_forms(self) -> tuple[Payment, ...]:
         """The payments added up per form, in the order the forms first appear."""
-        forms: dict[str, Decimal] = {}
+        forms: dict[PaymentForm, Decimal] = {}
         for payment in self.payments:
             forms[payment.form] = forms.get(payment.form, ZERO) + payment.amount
         return tuple(Payment(form, amount) for form, amount in forms.items())

@@ -12,9 +12,10 @@ from eqinvoice import (
     VoucherInvalid,
     VoucherKind,
     build,
+    issuer_legend,
     rimpe_legend,
 )
-from tests.builders import RUC, a_line, a_voucher, an_issuer, signed
+from tests.builders import CASH, RUC, TRANSFER, a_line, a_voucher, an_issuer, signed
 
 
 def tree_of(**overrides) -> etree._Element:
@@ -45,9 +46,9 @@ def test_the_final_consumer_is_named_as_the_sri_names_it():
 
 def test_the_payments_add_up_per_form():
     payments = (
-        Payment("20", Decimal("5.00")),
-        Payment("01", Decimal("5.00")),
-        Payment("20", Decimal("3.30")),
+        Payment(TRANSFER, Decimal("5.00")),
+        Payment(CASH, Decimal("5.00")),
+        Payment(TRANSFER, Decimal("3.30")),
     )
     tree = tree_of(payments=payments)
     paid = {p.findtext("formaPago"): p.findtext("total") for p in tree.iterfind(".//pago")}
@@ -78,3 +79,12 @@ def test_a_rimpe_taxpayer_carries_the_legend_its_schema_fixes():
     tree = etree.fromstring(signed(a_voucher(), an_issuer(rimpe=True)))
     assert tree.findtext("infoTributaria/contribuyenteRimpe") == rimpe_legend()
     assert rimpe_legend().startswith("CONTRIBUYENTE")
+
+
+@pytest.mark.parametrize("kind", list(VoucherKind))
+def test_a_popular_business_carries_the_legend_the_ficha_tecnica_requires(kind):
+    issuer = an_issuer(rimpe=True, popular_business=True)
+    tree = etree.fromstring(signed(a_voucher(kind), issuer))
+    assert tree.findtext("infoTributaria/contribuyenteRimpe") == issuer_legend(issuer)
+    assert issuer_legend(issuer) == "CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE"
+    assert issuer_legend(an_issuer()) is None
