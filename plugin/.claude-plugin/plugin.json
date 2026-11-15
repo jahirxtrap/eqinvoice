@@ -1,6 +1,6 @@
 {
   "name": "eqinvoice",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Every electronic voucher of Ecuador's SRI, from invoices and credit or debit notes to purchase settlements, remission guides and withholdings: parties looked up in the SRI's registry, drafts with a printed preview, then signed, sent, authorized and filed with their PDF.",
   "author": {
     "name": "jahirtrap",

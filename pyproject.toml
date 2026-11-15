@@ -1,6 +1,6 @@
 [project]
 name = "eqinvoice"
-version = "1.2.0"
+version = "1.2.1"
 description = "Every electronic voucher of Ecuador's SRI, from invoices to withholdings: build, sign, send, authorize and print, as a library or an MCP server."
 readme = "README.md"
 requires-python = ">=3.11"

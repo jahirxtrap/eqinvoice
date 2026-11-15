@@ -1,7 +1,6 @@
-- Added debit notes, purchase settlements, remission guides and withholdings (comprobante de retención 2.0.0), built, signed, checked against the SRI's own schemas, read back and printed like invoices and credit notes
-- Added lotes: up to 50 signed vouchers sent at once under an access key of their own, with `authorize_batch` giving each one's authorization
-- Added `tax_on` and `withhold`, which work out IVA and retentions to the cent and check IVA retention codes against the SRI's table
-- Added foreign identifications (`BuyerKind.FOREIGN`) and the party's address on invoices and purchase settlements
-- Added the MCP tools `draft_debit_note`, `draft_purchase_settlement`, `draft_remission_guide` and `draft_withholding`; `register_client` keeps suppliers, carriers and withheld parties, with an address or a foreign identification
-- Changed `period_sales` so debit notes add to a period's sales, and anything that is no sale stays out
-- Drafts kept by 1.1 still read and issue
+- Changed signing to write the certificate's issuer exactly as Java writes it, so the SRI's validator reads it back as the same name whatever string types the certificate uses
+- Added the refusal of a signature that names another taxpayer's RUC (`not_the_issuers`), and `details(credential).rucs` with the RUCs a certificate names
+- Added the refusal of a voucher heavier than the 320 KB the SRI takes, before it is sent
+- Changed the User-Agent the registry and the web services see to the library's name and version
+- Fixed `read_voucher` for debit notes with a reason that no taxed base takes, and for withholdings of the older 1.0.0 format
+- Changed `configure_issuer` to issue from the head office when no establishment is given
